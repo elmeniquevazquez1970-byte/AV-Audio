@@ -1,12 +1,12 @@
 desc: SPRINGSREVERBS - Author Adrian Vazquez
-author: Adrian Vazquez
+author: AV Audio - Adrian Vazquez
 version: 1.0
-changelog: Algoritmo de dispersi髇 dispersiva Allpass, red FDN de muelles y GUI interactiva estilo Ne髇.
+changelog: Algoritmo de dispersi贸n dispersiva Allpass, red FDN de muelles y GUI interactiva estilo Ne贸n.
 
-// --- SLIDERS VIRTUALES (Compatibles con automatizaci髇) ---
+// --- SLIDERS VIRTUALES (Compatibles con automatizaci贸n) ---
 slider1:0<0,4,1{AKG BX20 Torsional,British Spring Tube,Accutronics Drippy,Grampian 636 Germanium,Furman RV-20 Studio}>Modelo de Resorte
 slider2:2.5<0.5,6.0,0.1>Decay / RT60 (s)
-slider3:50<0,100,1>Chirp / Dispersi髇 (%)
+slider3:50<0,100,1>Chirp / Dispersi贸n (%)
 slider4:40<0,100,1>Boing / Transitorio (%)
 slider5:5000<1000,12000,100>Damping / High Cut (Hz)
 slider6:120<20,500,5>Low Cut / HPF (Hz)
@@ -20,12 +20,12 @@ out_pin:left output
 out_pin:right output
 
 @init
-gfx_clear = 0x121216; // Fondo oscuro ne髇
+gfx_clear = 0x121216; // Fondo oscuro ne贸n
 
 // Sample Rate Setup
 sr = srate > 0 ? srate : 44100;
 
-// --- ASIGNACI覰 DE MEMORIA DE BUFFERES ---
+// --- ASIGNACI脫N DE MEMORIA DE BUFFERES ---
 // Allpass dispersion chain (Chirp)
 ap1_L = 0; ap1_R = 1000;
 ap2_L = 2000; ap2_R = 3000;
@@ -66,7 +66,7 @@ drag_start_y = 0;
 drag_start_val = 0;
 
 @slider
-// Conversi髇 de par醡etros
+// Conversi贸n de par谩metros
 model = slider1;
 decay_sec = slider2;
 dispersion = slider3 / 100;
@@ -92,12 +92,12 @@ model == 0 ? ( // AKG BX20 (Torsional, denso, oscuro, largo)
   ap_g = 0.55 * dispersion;
   decay_mult = 0.82;
   saturation = 0.10;
-) : model == 2 ? ( // Accutronics Drippy (Ataque met醠ico, surf guitar, el醩tico)
+) : model == 2 ? ( // Accutronics Drippy (Ataque met谩lico, surf guitar, el谩stico)
   len_d1_base = 0.031; len_d2_base = 0.043; len_d3_base = 0.061; len_d4_base = 0.079;
   ap_g = 0.78 * dispersion;
   decay_mult = 0.72;
   saturation = 0.35;
-) : model == 3 ? ( // Grampian 636 (Germanio, saturado, arm髇icos marcados)
+) : model == 3 ? ( // Grampian 636 (Germanio, saturado, arm贸nicos marcados)
   len_d1_base = 0.041; len_d2_base = 0.059; len_d3_base = 0.083; len_d4_base = 0.101;
   ap_g = 0.70 * dispersion;
   decay_mult = 0.78;
@@ -109,7 +109,7 @@ model == 0 ? ( // AKG BX20 (Torsional, denso, oscuro, largo)
   saturation = 0.05;
 );
 
-// C醠culo de longitudes en muestras
+// C谩lculo de longitudes en muestras
 len_d1_L = floor(sr * len_d1_base); 
 len_d1_R = floor(sr * (len_d1_base * 1.05));
 len_d2_L = floor(sr * len_d2_base); 
@@ -119,7 +119,7 @@ len_d3_R = floor(sr * (len_d3_base * 1.04));
 len_d4_L = floor(sr * len_d4_base); 
 len_d4_R = floor(sr * (len_d4_base * 0.97));
 
-// Realimentaci髇 seg鷑 RT60
+// Realimentaci贸n seg煤n RT60
 fb_coeff = min(0.96, exp(-3 * (len_d1_base + len_d4_base) / (decay_sec * decay_mult)));
 
 @sample
@@ -132,7 +132,7 @@ hpf_R = hp_coeff * hpf_R + (1 - hp_coeff) * inR;
 sigL = inL - hpf_L;
 sigR = inR - hpf_R;
 
-// --- DRIVE / BOING DE ENTRADA (Saturaci髇 no lineal del muelle) ---
+// --- DRIVE / BOING DE ENTRADA (Saturaci贸n no lineal del muelle) ---
 boing_L = sigL * (1 + boing_drive * 2);
 boing_R = sigR * (1 + boing_drive * 2);
 saturation > 0 ? (
@@ -140,7 +140,7 @@ saturation > 0 ? (
   boing_R = atan(boing_R * (1 + saturation)) / (1 + saturation * 0.5);
 );
 
-// --- RED DE DISPERSI覰 ALLPASS (Generaci髇 del "Chirp" de muelle) ---
+// --- RED DE DISPERSI脫N ALLPASS (Generaci贸n del "Chirp" de muelle) ---
 // Canal Izquierdo
 buf_ap1 = ap1_L[pos_ap1_L]; ap1_L[pos_ap1_L] = boing_L + buf_ap1 * ap_g; ap_out_L = buf_ap1 - ap1_L[pos_ap1_L] * ap_g;
 pos_ap1_L = (pos_ap1_L + 1) % len_ap1;
@@ -161,11 +161,11 @@ pos_ap2_R = (pos_ap2_R + 1) % len_ap2;
 buf_ap3 = ap3_R[pos_ap3_R]; ap3_R[pos_ap3_R] = ap_out_R + buf_ap3 * ap_g; ap_out_R = buf_ap3 - ap3_R[pos_ap3_R] * ap_g;
 pos_ap3_R = (pos_ap3_R + 1) % len_ap3;
 
-// --- LECTURA DE L蚇EAS DE RETARDO FDN ---
+// --- LECTURA DE L脥NEAS DE RETARDO FDN ---
 out_d1_L = d1_L[pos_d1_L]; out_d2_L = d2_L[pos_d2_L]; out_d3_L = d3_L[pos_d3_L]; out_d4_L = d4_L[pos_d4_L];
 out_d1_R = d1_R[pos_d1_R]; out_d2_R = d2_R[pos_d2_R]; out_d3_R = d3_R[pos_d3_R]; out_d4_R = d4_R[pos_d4_R];
 
-// --- MATRIZ MEZCLADORA HADAMARD (Realimentaci髇 de Muelles) ---
+// --- MATRIZ MEZCLADORA HADAMARD (Realimentaci贸n de Muelles) ---
 fb1_L =  0.5 * (out_d1_L + out_d2_L + out_d3_L + out_d4_L);
 fb2_L =  0.5 * (out_d1_L - out_d2_L + out_d3_L - out_d4_L);
 fb3_L =  0.5 * (out_d1_L + out_d2_L - out_d3_L - out_d4_L);
@@ -176,7 +176,7 @@ fb2_R =  0.5 * (out_d1_R - out_d2_R + out_d3_R - out_d4_R);
 fb3_R =  0.5 * (out_d1_R + out_d2_R - out_d3_R - out_d4_R);
 fb4_R =  0.5 * (out_d1_R - out_d2_R - out_d3_R + out_d4_R);
 
-// --- FILTRADO DE AMORTIGUACI覰 (LPF Damping en el bucle) ---
+// --- FILTRADO DE AMORTIGUACI脫N (LPF Damping en el bucle) ---
 lpf_L1 = lpf_L1 * lp_coeff + fb1_L * (1 - lp_coeff);
 lpf_L2 = lpf_L2 * lp_coeff + fb2_L * (1 - lp_coeff);
 lpf_L3 = lpf_L3 * lp_coeff + fb3_L * (1 - lp_coeff);
@@ -202,7 +202,7 @@ d4_R[pos_d4_R] = ap_out_R + lpf_R4 * fb_coeff; pos_d4_R = (pos_d4_R + 1) % len_d
 wetL = (out_d1_L - out_d2_L + out_d3_L - out_d4_L) * 0.35;
 wetR = (out_d1_R - out_d2_R + out_d3_R - out_d4_R) * 0.35;
 
-// PROCESAMIENTO DE ANCHO EST蒖EO M/S
+// PROCESAMIENTO DE ANCHO EST脡REO M/S
 mid = (wetL + wetR) * 0.5;
 side = (wetL - wetR) * 0.5 * width;
 wetL = mid + side;
@@ -212,12 +212,12 @@ wetR = mid - side;
 spl0 = (inL * (1 - mix) + wetL * mix) * out_gain;
 spl1 = (inR * (1 - mix) + wetR * mix) * out_gain;
 
-// Medidor de nivel para la animaci髇 GUI
+// Medidor de nivel para la animaci贸n GUI
 disp_level = (abs(wetL) + abs(wetR)) * 0.5;
 
 @gfx 680 460
 
-// --- PALETA DE COLORES NE覰 ---
+// --- PALETA DE COLORES NE脫N ---
 bg_r = 0.07; bg_g = 0.07; bg_b = 0.09;
 c_cyan_r = 0.0; c_cyan_g = 0.9; c_cyan_b = 1.0;
 c_pink_r = 1.0; c_pink_g = 0.1; c_pink_b = 0.6;
@@ -228,7 +228,7 @@ c_dim_r = 0.35; c_dim_g = 0.38; c_dim_b = 0.45;
 gfx_r = bg_r; gfx_g = bg_g; gfx_b = bg_b;
 gfx_rect(0, 0, gfx_w, gfx_h);
 
-// Encabezado / Banner Ne髇
+// Encabezado / Banner Ne贸n
 gfx_r = c_cyan_r; gfx_g = c_cyan_g; gfx_b = c_cyan_b;
 gfx_x = 25; gfx_y = 20;
 gfx_setfont(1, "Arial", 22, 'B');
@@ -243,7 +243,7 @@ gfx_drawstr("VINTAGE SPRING WORKSTATION");
 gfx_r = c_dim_r * 0.5; gfx_g = c_dim_g * 0.5; gfx_b = c_dim_b * 0.5;
 gfx_roundrect(15, 10, gfx_w - 30, gfx_h - 20, 8);
 
-// --- VISUALIZADOR DIN罬ICO DE MUELLES (SPRING OSCILLOSCOPE) ---
+// --- VISUALIZADOR DIN脕MICO DE MUELLES (SPRING OSCILLOSCOPE) ---
 vis_x = 25; vis_y = 55; vis_w = gfx_w - 50; vis_h = 100;
 gfx_r = 0.03; gfx_g = 0.03; gfx_b = 0.05;
 gfx_rect(vis_x, vis_y, vis_w, vis_h);
@@ -277,7 +277,7 @@ while (i < spring_nodes) (
   i += 1;
 );
 
-// --- SELECTOR DE MODELO (BOTONES NE覰) ---
+// --- SELECTOR DE MODELO (BOTONES NE脫N) ---
 model_y = 175;
 gfx_r = 0.8; gfx_g = 0.8; gfx_b = 0.8;
 gfx_x = 25; gfx_y = model_y;
@@ -318,9 +318,9 @@ while (m < 5) (
   m += 1;
 );
 
-// --- DIBUJO DE PERILLAS NE覰 INTERACTIVAS ---
+// --- DIBUJO DE PERILLAS NE脫N INTERACTIVAS ---
 function draw_knob(x, y, radius, val, min_v, max_v, title, unit_str, k_idx) (
-  // Interacci髇 Mouse
+  // Interacci贸n Mouse
   mouse_cap & 1 ? (
     active_knob == -1 && sqr(mouse_x - x) + sqr(mouse_y - y) <= sqr(radius + 5) ? (
       active_knob = k_idx;
@@ -347,7 +347,7 @@ function draw_knob(x, y, radius, val, min_v, max_v, title, unit_str, k_idx) (
   gfx_r = c_dim_r; gfx_g = c_dim_g; gfx_b = c_dim_b;
   gfx_circle(x, y, radius, 0);
   
-  // Arco de Valor Ne髇
+  // Arco de Valor Ne贸n
   a = ang_start;
   while (a <= ang_val) (
     kx = x + cos(a) * (radius - 2);
@@ -398,7 +398,7 @@ slider7 = draw_knob(190, row2_y, 26, slider7, 0, 200, "WIDTH", "%", 7);
 slider8 = draw_knob(305, row2_y, 26, slider8, 0, 100, "MIX", "%", 8);
 slider9 = draw_knob(420, row2_y, 26, slider9, -24, 12, "OUTPUT", "dB", 9);
 
-// Notificar cambios de slider si hubo interacci髇 de mouse
+// Notificar cambios de slider si hubo interacci贸n de mouse
 sliderchange(slider2); sliderchange(slider3); sliderchange(slider4);
 sliderchange(slider5); sliderchange(slider6); sliderchange(slider7);
 sliderchange(slider8); sliderchange(slider9);
