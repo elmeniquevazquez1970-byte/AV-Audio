@@ -1,5 +1,5 @@
 desc:ReaDynEq
-author:AV - Adrian Vazquez
+author:AV Audio - Adrian Vazquez
 options:gfx=1
 in_pin:left input
 in_pin:right input
@@ -109,7 +109,7 @@ LOG_20 = log(20); LOG_20K = log(20000); LOG_RNG = LOG_20K - LOG_20;
 LN10 = log(10); LN10_OVER_20 = LN10 / 20; INV_LN10 = 1 / LN10;
 AG_EPS = 0.000000001;
 
-// UI scale — 0=25%, 1=50%, 2=75%, 3=100%
+// UI scale â€” 0=25%, 1=50%, 2=75%, 3=100%
 ui_scale_int = 1.0;
 ui_scale_idx = 3;
 
@@ -743,7 +743,7 @@ dsp_state[0] = dsp_state[0] + 0.000000000000001;
 // ===== RENDER MODE: directo a pantalla si escala=100%, sino buffer =====
 imgdim_ready == 0 ? ( gfx_setimgdim(0, 1000, 620); imgdim_ready = 1; );
 
-// Input state — una sola vez por frame, antes de cualquier handler
+// Input state â€” una sola vez por frame, antes de cualquier handler
 mcap = mouse_cap;
 mdown = (mcap & 1) > 0;
 mprev = (prev_cap & 1) > 0;
@@ -764,7 +764,7 @@ gui_scaled_w = floor(1000 * gui_scale + 0.5);
 gui_scaled_h = floor(620 * gui_scale + 0.5);
 
 // Modo nativo: el contenido se dibuja a 100% exacto -> directo a pantalla.
-// Robusto frente a redimensionados del SO: si el tamaño final del contenido
+// Robusto frente a redimensionados del SO: si el tamaÃ±o final del contenido
 // es 1000x620, no importa si la ventana es 1002, 1004 o 1010 px de ancho.
 _native = (gui_scaled_w == 1000) * (gui_scaled_h == 620);
 
@@ -787,7 +787,7 @@ _orig_my = mouse_y;
 mouse_x = (mouse_x - gui_off_x) / gui_scale;
 mouse_y = (mouse_y - gui_off_y) / gui_scale;
 
-// AV logo — click CICLA UI scale en orden DECRECIENTE:
+// AV logo â€” click CICLA UI scale en orden DECRECIENTE:
 // 100% ? 75% ? 50% ? 25% ? 100% ...
 // (idx 0 = 25%, 1 = 50%, 2 = 75%, 3 = 100%; sumar 3 equivale a restar 1)
 in_av = (mouse_x >= 0) && (mouse_x <= 60) && (mouse_y >= 0) && (mouse_y <= 30);
