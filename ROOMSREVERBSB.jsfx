@@ -1,4 +1,4 @@
-desc:ROOMSREVERBS - Algorithmic Bricasti M7 Room Engine (GUI Knobs)
+desc:ROOMSREVERBS - Algorithmic Bricasti M7 Room Engine - AV Audio - Adrian Vazquez
 
 slider1:0<0,17,1{Studio A (Natural),Vocal Booth / Soft,Live Drum / Percussion,Tiled / Glass Room,Wooden Room (Warm),Stone / Concrete,Acoustic Chamber,Bright Room,Colored (Red/Blue),Dark Room (Damped),Front Room (Medium),Center Room (Hallway),Back Room (Stairwell),Studio K (Corridor),Waits Room (Tunnel),Corn Room (Vault),Oakland Room (Studio),SF Perf Room (Hall)}>Profile
 slider2:50<10,100,1>Room Size (%)
@@ -15,7 +15,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-// AsignaciÛn de memoria para retardos
+// Asignaci√≥n de memoria para retardos
 MAX_DELAY = 65536;
 mem_er_l = 0;
 mem_er_r = MAX_DELAY;
@@ -32,11 +32,11 @@ pos_fdn4 = 0; pos_fdn5 = 0; pos_fdn6 = 0; pos_fdn7 = 0;
 lp0 = 0; lp1 = 0; lp2 = 0; lp3 = 0; lp4 = 0; lp5 = 0; lp6 = 0; lp7 = 0;
 hp_l = 0; hp_r = 0;
 
-// Primos base para FDN (geometrÌa modal)
+// Primos base para FDN (geometr√≠a modal)
 base_ms0 = 7.31;  base_ms1 = 11.17; base_ms2 = 13.89; base_ms3 = 17.53;
 base_ms4 = 21.41; base_ms5 = 25.07; base_ms6 = 29.63; base_ms7 = 33.71;
 
-// Estado del mouse para la interfaz gr·fica
+// Estado del mouse para la interfaz gr√°fica
 active_knob = -1;
 drag_start_y = 0;
 drag_start_val = 0;
@@ -48,7 +48,7 @@ rt60 = slider3;
 hp_freq = slider5;
 hp_alpha = exp(-2.0 * $pi * hp_freq / srate);
 
-// Mapeo sintÈtico derivado de los 35 conjuntos de impulsos Bricasti M7 Rooms
+// Mapeo sint√©tico derivado de los 35 conjuntos de impulsos Bricasti M7 Rooms
 profile = slider1;
 profile == 0  ? ( size_mod = 1.00; damp_scale = 1.0; er_boost = 1.00; ); // Studio A (Natural Control) [59-61]
 profile == 1  ? ( size_mod = 0.55; damp_scale = 0.6; er_boost = 1.30; ); // Vocal Booth / Soft [60-62]
@@ -65,7 +65,7 @@ profile == 11 ? ( size_mod = 1.20; damp_scale = 1.2; er_boost = 1.30; ); // Cent
 profile == 12 ? ( size_mod = 1.45; damp_scale = 1.5; er_boost = 1.40; ); // Back Room (Stairwell / Escalera) [89-91]
 profile == 13 ? ( size_mod = 0.80; damp_scale = 1.1; er_boost = 1.35; ); // Studio K (Corridor / Pasillo estrecho) [92-94]
 profile == 14 ? ( size_mod = 1.60; damp_scale = 0.8; er_boost = 1.20; ); // Waits Room (Tunnel Echo) [95-97]
-profile == 15 ? ( size_mod = 2.00; damp_scale = 0.7; er_boost = 1.10; ); // Corn Room (Vault / BÛveda) [98-100]
+profile == 15 ? ( size_mod = 2.00; damp_scale = 0.7; er_boost = 1.10; ); // Corn Room (Vault / B√≥veda) [98-100]
 profile == 16 ? ( size_mod = 0.60; damp_scale = 0.5; er_boost = 1.25; ); // Oakland Room (Intimate Studio) [101-103]
 profile == 17 ? ( size_mod = 1.35; damp_scale = 1.3; er_boost = 1.15; ); // SF Perf Room (Reflective Hall) [104-106]
 
@@ -208,7 +208,7 @@ function draw_knob(x, y, r, val, min_v, max_v, title, unit, step, slider_idx)
   gfx_set(0.35, 0.38, 0.45, 1.0);
   gfx_circle(x, y, r, 0);
 
-  gfx_set(0.20, 0.75, 1.00, 1.0); // Azul neÛn
+  gfx_set(0.20, 0.75, 1.00, 1.0); // Azul ne√≥n
   ptr_x = x + sin(ang) * (r - 5);
   ptr_y = y - cos(ang) * (r - 5);
   gfx_line(x, y, ptr_x, ptr_y);
