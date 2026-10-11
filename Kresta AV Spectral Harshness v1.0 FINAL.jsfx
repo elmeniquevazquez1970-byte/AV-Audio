@@ -1,5 +1,5 @@
-desc: Kresta AV - Multiband Spectral Harshness Control —- AV Audio - Author Adrian Vazquez
-// version: 8.4 (node freq sliders extended to 48k for high sample rates)
+desc: Kresta AV - Multiband Spectral Harshness Control â€”- AV Audio - Author Adrian Vazquez
+// version: 1.0 (node freq sliders extended to 48k for high sample rates)
 
 // --- Sliders originales ---
 slider1:2000<20,15000,10>-Frequency Min (Hz)
@@ -1226,7 +1226,7 @@ gfx_set(gbg_r, gbg_g, gbg_b, 1); gfx_rect(graph_x, graph_y, graph_w, graph_h);
 gfx_set(txt_r, txt_g, txt_b, 1); gfx_setfont(1, "Arial", ui_f11, 'b');
 gfx_x = 12; gfx_y = 6; gfx_drawstr("MULTIBAND SPECTRAL HARSHNESS CONTROL");
 gfx_set(tsub_r, tsub_g, tsub_b, 1); gfx_setfont(1, "Arial", ui_f9, 'b');
-gfx_x = 12; gfx_y = 24; gfx_drawstr("AV Audio — Adrian Vazquez");
+gfx_x = 12; gfx_y = 24; gfx_drawstr("AV Audio â€” Adrian Vazquez");
 
 gfx_set(acc_r, acc_g, acc_b, 1); gfx_setfont(1, "Arial", ui_f18, 'b');
 gfx_measurestr("KRESTA AV", ka_w, ka_h);
@@ -1319,9 +1319,9 @@ draw_radio_btn(pun_x + fft_btn_w + 2, fft_y, fft_btn_w, fft_h, "2k", slider10 ==
 draw_radio_btn(pun_x + fft_btn_w*2 + 4, fft_y, fft_btn_w, fft_h, "4k", slider10 == 2, 12, acc_r, acc_g, acc_b);
 draw_radio_btn(pun_x + fft_btn_w*3 + 6, fft_y, fft_btn_w, fft_h, "8k", slider10 == 3, 13, acc_r, acc_g, acc_b);
 gfx_set(acc_r, acc_g, acc_b, 1); gfx_setfont(1, "Arial", ui_f10, 'b');
-slider10 == 0 ? info_str = "1024 — Fast" :
-slider10 == 1 ? info_str = "2048 — Balanced" :
-slider10 == 2 ? info_str = "4096 — Default" : info_str = "8192 — High Res";
+slider10 == 0 ? info_str = "1024 â€” Fast" :
+slider10 == 1 ? info_str = "2048 â€” Balanced" :
+slider10 == 2 ? info_str = "4096 â€” Default" : info_str = "8192 â€” High Res";
 gfx_x = pun_x; gfx_y = fft_info_y; gfx_drawstr(info_str);
 
 section_header("NODAL", pun_x, nod_hdr_y);
@@ -1559,9 +1559,9 @@ gr_val < -0.1 ? (
 );
 
 hover_node == 104 ? ( sprintf(#tip, "Amount: %d%%", slider4); draw_tooltip2(#tip, "Overall strength of spectral reduction", mx, my); ) :
-hover_node == 108 ? ( sprintf(#tip, "Focus: %d%%", slider11); draw_tooltip2(#tip, "Mid-centric emphasis — attenuates reduction near band edges", mx, my); ) :
+hover_node == 108 ? ( sprintf(#tip, "Focus: %d%%", slider11); draw_tooltip2(#tip, "Mid-centric emphasis â€” attenuates reduction near band edges", mx, my); ) :
 hover_node == 105 ? ( sprintf(#tip, "Release: %d ms", slider5); draw_tooltip2(#tip, "Time for the reduction to recover after a peak", mx, my); ) :
-hover_node == 106 ? ( sprintf(#tip, "Tilt: %.2f", slider6); draw_tooltip2(#tip, "Spectral bias — positive shifts reference toward highs", mx, my); ) :
+hover_node == 106 ? ( sprintf(#tip, "Tilt: %.2f", slider6); draw_tooltip2(#tip, "Spectral bias â€” positive shifts reference toward highs", mx, my); ) :
 hover_node == 107 ? ( sprintf(#tip, "Gain: %.1f dB", slider7); draw_tooltip2(#tip, "Final output gain after all processing", mx, my); ) :
 hover_node == 109 ? ( sprintf(#tip, "Punch: %d%%", slider15); draw_tooltip2(#tip, "Preserves transients by relaxing reduction on attacks", mx, my); ) :
 hover_node == 110 ? ( sprintf(#tip, "Unmask: %d%%", slider16); draw_tooltip2(#tip, "Sidechain-driven spectral ducking for unmasking", mx, my); ) :
@@ -1569,7 +1569,7 @@ hover_node == 111 ? ( sprintf(#tip, "Node Q: %.1f", slider18); draw_tooltip2(#ti
 hover_node == 112 ? ( sprintf(#tip, "SC HPF: %d Hz", slider20); draw_tooltip2(#tip, "High-pass filter on the sidechain input", mx, my); ) :
 hover_node == 113 ? ( sprintf(#tip, "Auto-Makeup: %d%%", slider19); draw_tooltip2(#tip, "Automatically compensates gain reduction at output", mx, my); ) :
 hover_node == 134 ? ( sprintf(#tip, "Attack: %.1f ms", slider33); draw_tooltip2(#tip, "How fast reduction engages (0 = instant)", mx, my); ) :
-hover_node == 135 ? ( sprintf(#tip, "Mix: %d%%", slider34); draw_tooltip2(#tip, "Dry/wet balance — 100%% = fully processed", mx, my); ) :
+hover_node == 135 ? ( sprintf(#tip, "Mix: %d%%", slider34); draw_tooltip2(#tip, "Dry/wet balance â€” 100%% = fully processed", mx, my); ) :
 hover_node == 136 ? ( sprintf(#tip, "SC Listen: %s", slider35==1?"On":"Off"); draw_tooltip2(#tip, "Monitor the filtered sidechain signal only", mx, my); ) :
 hover_node == 137 ? ( sprintf(#tip, "Auto-Thresh: %d%%  (offset %.1f dB)", slider36, at_offset_db); draw_tooltip2(#tip, "Threshold follows long-term input level (2s time constant)", mx, my); ) :
 hover_node == 138 ? ( sprintf(#tip, "Soft Knee: %.1f dB", slider37); draw_tooltip2(#tip, "Gradual transition around threshold (0 = hard)", mx, my); ) :
@@ -1592,10 +1592,10 @@ hover_node == 17 ? ( sprintf(#tip, "Solo: %s", slider13==1?"On":"Off"); draw_too
 hover_node == 8  ? ( sprintf(#tip, "Delta: %s", slider8==1?"On":"Off"); draw_tooltip2(#tip, "Listen to the removed signal only", mx, my); ) :
 hover_node == 9  ? ( sprintf(#tip, "Bypass: %s", slider9==1?"On":"Off"); draw_tooltip2(#tip, "Toggle plugin processing (dry passthrough)", mx, my); ) :
 hover_node == 18 ? ( sprintf(#tip, "Nodal Curve: %s", slider17==1?"On":"Off"); draw_tooltip2(#tip, "Enable 5 draggable nodes for custom curve sculpting", mx, my); ) :
-hover_node == 10 ? ( sprintf(#tip, "FFT: 1024"); draw_tooltip2(#tip, "Fastest / lowest latency — coarse frequency resolution", mx, my); ) :
+hover_node == 10 ? ( sprintf(#tip, "FFT: 1024"); draw_tooltip2(#tip, "Fastest / lowest latency â€” coarse frequency resolution", mx, my); ) :
 hover_node == 11 ? ( sprintf(#tip, "FFT: 2048"); draw_tooltip2(#tip, "Balanced speed and resolution", mx, my); ) :
 hover_node == 12 ? ( sprintf(#tip, "FFT: 4096"); draw_tooltip2(#tip, "Default precision for most material", mx, my); ) :
-hover_node == 13 ? ( sprintf(#tip, "FFT: 8192"); draw_tooltip2(#tip, "High-res for mastering — more CPU and latency", mx, my); ) :
+hover_node == 13 ? ( sprintf(#tip, "FFT: 8192"); draw_tooltip2(#tip, "High-res for mastering â€” more CPU and latency", mx, my); ) :
 hover_node == 14 ? ( sprintf(#tip, "Mode: Stereo"); draw_tooltip2(#tip, "Process L/R channels independently", mx, my); ) :
 hover_node == 15 ? ( sprintf(#tip, "Mode: Mid"); draw_tooltip2(#tip, "Process only the mid (center) channel", mx, my); ) :
 hover_node == 16 ? ( sprintf(#tip, "Mode: Side"); draw_tooltip2(#tip, "Process only the side (stereo difference) channel", mx, my); ) :
