@@ -1,5 +1,5 @@
-desc:H-Delay Hybrid Clone with Fixed Ping-Pong & Tap Tempo (JSFX God Tier)
-// Clone exacto del procesador Waves H-Delay con correcci髇 de topolog韆 Ping-Pong y Tap Tempo.
+desc:H-Delay Hybrid Clone - AV Audio - Adrian Vazquez
+// Clone exacto del procesador Waves H-Delay con correcci贸n de topolog铆a Ping-Pong y Tap Tempo.
 
 // -----------------------------------------------------------------------------
 // SLIDERS & CONTROLES
@@ -199,7 +199,7 @@ dest_delay_r = target_delay_samples - mod_samples;
 curr_delay_l = dest_delay_l + tape_glide_coeff * (curr_delay_l - dest_delay_l);
 curr_delay_r = dest_delay_r + tape_glide_coeff * (curr_delay_r - dest_delay_r);
 
-// 3. Lectura de buffers con Interpolaci髇 Hermite
+// 3. Lectura de buffers con Interpolaci贸n Hermite
 read_pos_l = write_pos - curr_delay_l;
 read_pos_l < 0 ? read_pos_l += MAX_DELAY_SAMPLES;
 i_l = floor(read_pos_l);
@@ -241,7 +241,7 @@ delay_out_r = hp_r.svf_hp(delay_out_r, slider9, 0.707);
 delay_out_l = lp_l.svf_lp(delay_out_l, slider10, 0.707);
 delay_out_r = lp_r.svf_lp(delay_out_r, slider10, 0.707);
 
-// 6. Secci髇 Anal骻ica
+// 6. Secci贸n Anal贸gica
 slider13 > 0 ? (
   hum_freq = (slider13 == 1 || slider13 == 3) ? 50 : 60;
   hum_inc = hum_freq / srate;
@@ -258,21 +258,21 @@ slider13 > 0 ? (
   delay_out_r = analog_saturate(delay_out_r, drive_val);
 );
 
-// 7. Procesamiento de Feedback y Escritura en Buffer (CORRECCI覰 PING-PONG)
+// 7. Procesamiento de Feedback y Escritura en Buffer (CORRECCI脫N PING-PONG)
 fb_l_processed = analog_saturate(delay_out_l * fb_gain, 1.0);
 fb_r_processed = analog_saturate(delay_out_r * fb_gain, 1.0);
 
 slider6 ? (
-  // TOPOLOG虯 PING-PONG CORREGIDA:
-  // La entrada se suma a Mono y se inyecta 贜ICAMENTE en el canal Izquierdo.
+  // TOPOLOG脥A PING-PONG CORREGIDA:
+  // La entrada se suma a Mono y se inyecta 脷NICAMENTE en el canal Izquierdo.
   // El canal Derecho no recibe entrada directa; solo recibe el feedback procesado del canal Izquierdo.
-  // En la siguiente repetici髇, el Izquierdo recibe el feedback del Derecho.
+  // En la siguiente repetici贸n, el Izquierdo recibe el feedback del Derecho.
   in_mono = (in_l + in_r) * 0.5;
   
   buf_l[write_pos] = in_mono + fb_r_processed;
   buf_r[write_pos] = fb_l_processed;
 ) : (
-  // Modo Est閞eo Est醤dar
+  // Modo Est茅reo Est谩ndar
   buf_l[write_pos] = in_l + fb_l_processed;
   buf_r[write_pos] = in_r + fb_r_processed;
 );
@@ -290,7 +290,7 @@ spl0 = out_l * out_trim;
 spl1 = out_r * out_trim;
 
 // -----------------------------------------------------------------------------
-// INTERFAZ GR罠ICA (@gfx)
+// INTERFAZ GR脕FICA (@gfx)
 // -----------------------------------------------------------------------------
 @gfx 220 70
 gfx_clear = 0x1E1E24;
