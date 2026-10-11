@@ -1,6 +1,6 @@
-desc: Renaissance Compressor Clone (RComp JSFX)
-author: Audio Lab
-version: 1.5
+desc: R Compressor Clone 
+author: AV Audio - Adrian Vazquez 
+version: 1.0
 
 slider1:slider_th=0<-60,0,0.1>Threshold (dB)
 slider2:slider_ratio=1<0.5,50,0.1>Ratio
@@ -41,11 +41,11 @@ warm_lp_coef = exp(-2.0 * 3.141592653589793 * 350.0 / srate);
 in_l = spl0;
 in_r = spl1;
 
-// 1. Detecci髇 Peak est閞eo
+// 1. Detecci贸n Peak est茅reo
 det = max(abs(in_l), abs(in_r));
 det_dB = det > 0.000001 ? log(det) * 8.685889638065037 : -120;
 
-// 2. C醠culo de Gain Reduction con Soft Knee (6 dB)
+// 2. C谩lculo de Gain Reduction con Soft Knee (6 dB)
 half_k = knee * 0.5;
 th_lower = th - half_k;
 th_upper = th + half_k;
@@ -68,7 +68,7 @@ ratio >= 1.0 ? (
   )
 );
 
-// 3. Modificaci髇 de Release (Electro vs Opto)
+// 3. Modificaci贸n de Release (Electro vs Opto)
 current_gr = abs(gr_dB);
 rel_mod = 1.0;
 
@@ -94,7 +94,7 @@ slider_arc == 1 ? (
   rel_mod *= arc_mod;
 );
 
-// Aplicaci髇 del tiempo de liberaci髇 efectivo
+// Aplicaci贸n del tiempo de liberaci贸n efectivo
 effective_rel_sec = rel_sec * max(0.08, min(rel_mod, 4.0));
 rel_coef = exp(-1.0 / (srate * effective_rel_sec));
 
@@ -107,27 +107,27 @@ target_gr_dB < gr_dB ? (
 
 gain_lin = exp(gr_dB * 0.11512925464970229);
 
-// 6. Aplicaci髇 de Ganancia
+// 6. Aplicaci贸n de Ganancia
 out_l = in_l * gain_lin * out_gain;
 out_r = in_r * gain_lin * out_gain;
 
-// 7. Car醕ter: Warm vs Smooth
+// 7. Car谩cter: Warm vs Smooth
 slider_warm == 1 ? (
-  // MODO WARM: Extracci髇 de banda grave (< 350 Hz)
+  // MODO WARM: Extracci贸n de banda grave (< 350 Hz)
   low_l = low_l * warm_lp_coef + out_l * (1.0 - warm_lp_coef);
   low_r = low_r * warm_lp_coef + out_r * (1.0 - warm_lp_coef);
   
-  // Intensidad de arm髇icos modulada proporcionalmente a la compresi髇 aplicada (1 - gain_lin)
+  // Intensidad de arm贸nicos modulada proporcionalmente a la compresi贸n aplicada (1 - gain_lin)
   gr_amount = 1.0 - gain_lin;
   
-  // Generaci髇 de 2do y 3er arm髇ico anal骻ico en graves
+  // Generaci贸n de 2do y 3er arm贸nico anal贸gico en graves
   harm_l = (0.15 * low_l * low_l + 0.20 * (low_l - low_l * low_l * low_l * 0.3333)) * gr_amount;
   harm_r = (0.15 * low_r * low_r + 0.20 * (low_r - low_r * low_r * low_r * 0.3333)) * gr_amount;
   
   out_l += harm_l;
   out_r += harm_r;
 );
-// En MODO SMOOTH (slider_warm == 0) no se altera la se馻l, garantizando 0.0% de distorsi髇 arm髇ica a馻dida.
+// En MODO SMOOTH (slider_warm == 0) no se altera la se帽al, garantizando 0.0% de distorsi贸n arm贸nica a帽adida.
 
 // 8. Limitador Brickwall a 0 dBFS
 slider_limiter == 1 ? (
