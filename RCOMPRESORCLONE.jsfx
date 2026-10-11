@@ -1,0 +1,212 @@
+desc: Renaissance Compressor Clone (RComp JSFX)
+author: Audio Lab
+version: 1.5
+
+slider1:slider_th=0<-60,0,0.1>Threshold (dB)
+slider2:slider_ratio=1<0.5,50,0.1>Ratio
+slider3:slider_att=16<0.5,500,0.1>Attack (ms)
+slider4:slider_rel=160<5,5000,1>Release (ms)
+slider5:slider_gain=0<-30,30,0.1>Output Gain (dB)
+slider6:slider_arc=1<0,1,1{Manual,ARC}>Release Mode
+slider7:slider_mode=0<0,1,1{Electro,Opto}>Behavior
+slider8:slider_warm=0<0,1,1{Smooth,Warm}>Character
+slider9:slider_limiter=1<0,1,1{Off,On}>Output Limiter (0 dBFS)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+gr_dB = 0;
+gr_peak = 0;
+gr_peak_hold = 0;
+env_long = 0;
+knee = 6.0;
+low_l = 0;
+low_r = 0;
+
+@slider
+th = slider_th;
+ratio = slider_ratio;
+att_sec = max(slider_att, 0.5) * 0.001;
+rel_sec = max(slider_rel, 5.0) * 0.001;
+out_gain = exp(slider_gain * 0.11512925464970229);
+
+att_coef = exp(-1.0 / (srate * att_sec));
+arc_lp_coef = exp(-1.0 / (srate * 0.050));
+warm_lp_coef = exp(-2.0 * 3.141592653589793 * 350.0 / srate);
+
+@sample
+in_l = spl0;
+in_r = spl1;
+
+// 1. Detección Peak estéreo
+det = max(abs(in_l), abs(in_r));
+det_dB = det > 0.000001 ? log(det) * 8.685889638065037 : -120;
+
+// 2. Cálculo de Gain Reduction con Soft Knee (6 dB)
+half_k = knee * 0.5;
+th_lower = th - half_k;
+th_upper = th + half_k;
+
+target_gr_dB = 0;
+
+ratio >= 1.0 ? (
+  det_dB > th_upper ? (
+    target_gr_dB = (1.0 - 1.0 / ratio) * (th - det_dB)
+  ) : det_dB > th_lower ? (
+    delta = det_dB - th_lower;
+    target_gr_dB = -((1.0 - 1.0 / ratio) * (delta * delta) / (2.0 * knee))
+  )
+) : (
+  det_dB < th_lower ? (
+    target_gr_dB = (1.0 / ratio - 1.0) * (det_dB - th)
+  ) : det_dB < th_upper ? (
+    delta = th_upper - det_dB;
+    target_gr_dB = -((1.0 / ratio - 1.0) * (delta * delta) / (2.0 * knee))
+  )
+);
+
+// 3. Modificación de Release (Electro vs Opto)
+current_gr = abs(gr_dB);
+rel_mod = 1.0;
+
+slider_mode == 0 ? (
+  current_gr < 3.0 ? (
+    rel_mod = 0.4 + 0.6 * (current_gr / 3.0);
+  ) : (
+    rel_mod = 1.0 + 0.15 * (current_gr - 3.0);
+  );
+) : (
+  current_gr < 3.0 ? (
+    rel_mod = 1.6 - 0.6 * (current_gr / 3.0);
+  ) : (
+    rel_mod = 1.0 / (1.0 + 0.15 * (current_gr - 3.0));
+  );
+);
+
+// 4. Auto Release Control (ARC)
+slider_arc == 1 ? (
+  env_long = env_long * arc_lp_coef + det * (1.0 - arc_lp_coef);
+  dyn_diff = abs(det - env_long);
+  arc_mod = 1.0 / (1.0 + dyn_diff * 5.0);
+  rel_mod *= arc_mod;
+);
+
+// Aplicación del tiempo de liberación efectivo
+effective_rel_sec = rel_sec * max(0.08, min(rel_mod, 4.0));
+rel_coef = exp(-1.0 / (srate * effective_rel_sec));
+
+// 5. Envelope Follower
+target_gr_dB < gr_dB ? (
+  gr_dB = gr_dB * att_coef + target_gr_dB * (1.0 - att_coef)
+) : (
+  gr_dB = gr_dB * rel_coef + target_gr_dB * (1.0 - rel_coef)
+);
+
+gain_lin = exp(gr_dB * 0.11512925464970229);
+
+// 6. Aplicación de Ganancia
+out_l = in_l * gain_lin * out_gain;
+out_r = in_r * gain_lin * out_gain;
+
+// 7. Carácter: Warm vs Smooth
+slider_warm == 1 ? (
+  // MODO WARM: Extracción de banda grave (< 350 Hz)
+  low_l = low_l * warm_lp_coef + out_l * (1.0 - warm_lp_coef);
+  low_r = low_r * warm_lp_coef + out_r * (1.0 - warm_lp_coef);
+  
+  // Intensidad de armónicos modulada proporcionalmente a la compresión aplicada (1 - gain_lin)
+  gr_amount = 1.0 - gain_lin;
+  
+  // Generación de 2do y 3er armónico analógico en graves
+  harm_l = (0.15 * low_l * low_l + 0.20 * (low_l - low_l * low_l * low_l * 0.3333)) * gr_amount;
+  harm_r = (0.15 * low_r * low_r + 0.20 * (low_r - low_r * low_r * low_r * 0.3333)) * gr_amount;
+  
+  out_l += harm_l;
+  out_r += harm_r;
+);
+// En MODO SMOOTH (slider_warm == 0) no se altera la señal, garantizando 0.0% de distorsión armónica añadida.
+
+// 8. Limitador Brickwall a 0 dBFS
+slider_limiter == 1 ? (
+  out_l = min(1.0, max(-1.0, out_l));
+  out_r = min(1.0, max(-1.0, out_r));
+);
+
+spl0 = out_l;
+spl1 = out_r;
+
+@gfx 320 65
+// Fondo de la interfaz
+gfx_r = 0.12; gfx_g = 0.12; gfx_b = 0.14; gfx_a = 1.0;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+meter_x = 15;
+meter_y = 22;
+meter_w = gfx_w - 30;
+meter_h = 16;
+
+gfx_r = 0.08; gfx_g = 0.08; gfx_b = 0.10;
+gfx_rect(meter_x, meter_y, meter_w, meter_h);
+
+// Peak Hold
+abs_gr = abs(gr_dB);
+abs_gr >= gr_peak ? (
+  gr_peak = abs_gr;
+  gr_peak_hold = 30;
+) : (
+  gr_peak_hold > 0 ? (
+    gr_peak_hold -= 1;
+  ) : (
+    gr_peak = max(abs_gr, gr_peak * 0.94);
+  );
+);
+
+// Barra de Gain Reduction
+gfx_r = 1.0; gfx_g = 0.55; gfx_b = 0.1;
+gr_len = min(1.0, abs_gr / 24.0) * meter_w;
+gfx_rect(meter_x, meter_y, gr_len, meter_h);
+
+// Indicador Peak Hold
+peak_x = meter_x + min(1.0, gr_peak / 24.0) * meter_w;
+gfx_r = 1.0; gfx_g = 0.9; gfx_b = 0.2;
+gfx_line(peak_x, meter_y, peak_x, meter_y + meter_h - 1);
+gfx_line(peak_x - 1, meter_y, peak_x - 1, meter_y + meter_h - 1);
+
+// Texto Digital
+gfx_r = 0.95; gfx_g = 0.95; gfx_b = 0.95;
+gfx_x = meter_x; gfx_y = 5;
+gfx_drawstr("GR: ");
+gfx_drawnumber(gr_dB, 1);
+gfx_drawstr(" dB   |   Peak Hold: -");
+gfx_drawnumber(gr_peak, 1);
+gfx_drawstr(" dB");
+
+// Regla graduada
+gfx_r = 0.55; gfx_g = 0.55; gfx_b = 0.60;
+
+tx = meter_x;
+gfx_line(tx, meter_y + meter_h, tx, meter_y + meter_h + 3);
+gfx_x = tx - 2; gfx_y = meter_y + meter_h + 4; gfx_drawstr("0");
+
+tx = meter_x + (3.0 / 24.0) * meter_w;
+gfx_line(tx, meter_y + meter_h, tx, meter_y + meter_h + 3);
+gfx_x = tx - 5; gfx_y = meter_y + meter_h + 4; gfx_drawstr("-3");
+
+tx = meter_x + (6.0 / 24.0) * meter_w;
+gfx_line(tx, meter_y + meter_h, tx, meter_y + meter_h + 3);
+gfx_x = tx - 5; gfx_y = meter_y + meter_h + 4; gfx_drawstr("-6");
+
+tx = meter_x + (12.0 / 24.0) * meter_w;
+gfx_line(tx, meter_y + meter_h, tx, meter_y + meter_h + 3);
+gfx_x = tx - 8; gfx_y = meter_y + meter_h + 4; gfx_drawstr("-12");
+
+tx = meter_x + (18.0 / 24.0) * meter_w;
+gfx_line(tx, meter_y + meter_h, tx, meter_y + meter_h + 3);
+gfx_x = tx - 8; gfx_y = meter_y + meter_h + 4; gfx_drawstr("-18");
+
+tx = meter_x + meter_w - 1;
+gfx_line(tx, meter_y + meter_h, tx, meter_y + meter_h + 3);
+gfx_x = tx - 14; gfx_y = meter_y + meter_h + 4; gfx_drawstr("-24");

@@ -1,0 +1,439 @@
+desc: HALLSREVERBS - Emt 245, 246, 248, 250 Lexicon 480L y 300 & Bricast M7 - Author Adrian Vazquez
+author: Sound Designer & Audio DSP Adrian Vazquez
+version: 2.1
+category: Reverb
+
+// ----------------------------------------------------------------------------
+// SLIDERS
+// ----------------------------------------------------------------------------
+slider1:0<0,40,1{00: 480L Large Hall,01: 480L Large Stage,02: 480L Medium Hall,03: 480L Medium Stage,04: 480L Small Hall,05: 480L Small Stage,06: 480L Large Church,07: 480L Small Church,08: 480L Jazz Hall,09: 480L Auto Park,10: Lexicon 300 Dance Hall,11: Lexicon 300 Large Hall,12: Lexicon 300 Lecture Hall,13: Lexicon 300 Medium Hall,14: Lexicon 300 Small Hall,15: EM2450 Hall Huge,16: EM2450 Hall Large,17: EM2450 Hall Medium,18: EM2450 Hall Small,19: EM2460 Hall Large 1,20: EM2460 Hall Large 2,21: EM2460 Hall Large 3,22: EM2460 Hall Large Damped,23: EM2460 Hall Medium 1,24: EM2460 Hall Medium 2,25: 248 - Hall Small (Em2480-14),26: 248 - Hall Medium (Em2480-12),27: 248 - Hall Large (Em2480-10),28: 248 - Hall Huge (Em2480-09),29: 250 - Concert Hall (Em2500-07),30: 250 - Concert Hall Bright (Em2500-13),31: M7 - Large Hall 01,32: M7 - Medium Hall 02,33: M7 - Small Hall 03,34: M7 - Large & Near 04,35: M7 - Cathedral,36: M7 - Vocal Hall,37: M7 - Bright Stage,38: M7 - Scoring Hall,39: M7 - Wood Hall,40: Custom / Manual}>Preset Profile
+slider2:2.0<0.2,8.0,0.05>Reverb Time / RT60 (s)
+slider3:1.0<0.5,2.0,0.01>Size Scale
+slider4:25<0,250,1>Pre-Delay (ms)
+slider5:80<20,500,1>Low Cut (Hz)
+slider6:14000<2000,20000,10>High Cut (Hz)
+slider7:7500<800,20000,10>Hi Damping (Hz)
+slider8:75<0,100,1>Diffusion (%)
+slider9:35<0,100,1>Mod Depth (%)
+slider10:50<0,100,1>ER / Late Balance (%)
+slider11:100<0,200,1>Stereo Width (%)
+slider12:0<-60,12,0.1>Dry Gain (dB)
+slider13:-6<-60,12,0.1>Wet Gain (dB)
+
+in_pin:Input L
+in_pin:Input R
+out_pin:Output L
+out_pin:Output R
+
+@init
+freembuf(0);
+mem_ptr = 0;
+
+MAX_PREDELAY = srate * 0.3;
+buf_predelay_l = mem_ptr; mem_ptr += MAX_PREDELAY + 1;
+buf_predelay_r = mem_ptr; mem_ptr += MAX_PREDELAY + 1;
+
+// Early Allpass Diffusers (4 Stages)
+ap_len0 = floor(0.0047 * srate); buf_ap0 = mem_ptr; mem_ptr += ap_len0 + 10;
+ap_len1 = floor(0.0073 * srate); buf_ap1 = mem_ptr; mem_ptr += ap_len1 + 10;
+ap_len2 = floor(0.0113 * srate); buf_ap2 = mem_ptr; mem_ptr += ap_len2 + 10;
+ap_len3 = floor(0.0179 * srate); buf_ap3 = mem_ptr; mem_ptr += ap_len3 + 10;
+
+// Engine 0: Lexicon 4-Tank Network
+fdn_lex_base0 = floor(0.0672 * srate); buf_lex0 = mem_ptr; mem_ptr += fdn_lex_base0 * 2.5;
+fdn_lex_base1 = floor(0.0868 * srate); buf_lex1 = mem_ptr; mem_ptr += fdn_lex_base1 * 2.5;
+fdn_lex_base2 = floor(0.1084 * srate); buf_lex2 = mem_ptr; mem_ptr += fdn_lex_base2 * 2.5;
+fdn_lex_base3 = floor(0.1297 * srate); buf_lex3 = mem_ptr; mem_ptr += fdn_lex_base3 * 2.5;
+
+// Engine 1: 8-Channel Prime FDN
+f_base0 = 0.0293; f_base1 = 0.0371; f_base2 = 0.0419; f_base3 = 0.0498;
+f_base4 = 0.0583; f_base5 = 0.0677; f_base6 = 0.0769; f_base7 = 0.0881;
+
+buf_fdn0 = mem_ptr; mem_ptr += floor(f_base0 * srate * 3.5) + 10;
+buf_fdn1 = mem_ptr; mem_ptr += floor(f_base1 * srate * 3.5) + 10;
+buf_fdn2 = mem_ptr; mem_ptr += floor(f_base2 * srate * 3.5) + 10;
+buf_fdn3 = mem_ptr; mem_ptr += floor(f_base3 * srate * 3.5) + 10;
+buf_fdn4 = mem_ptr; mem_ptr += floor(f_base4 * srate * 3.5) + 10;
+buf_fdn5 = mem_ptr; mem_ptr += floor(f_base5 * srate * 3.5) + 10;
+buf_fdn6 = mem_ptr; mem_ptr += floor(f_base6 * srate * 3.5) + 10;
+buf_fdn7 = mem_ptr; mem_ptr += floor(f_base7 * srate * 3.5) + 10;
+
+// State Pointers
+ptr_predelay = 0;
+ptr_ap0 = 0; ptr_ap1 = 0; ptr_ap2 = 0; ptr_ap3 = 0;
+ptr_lex0 = 0; ptr_lex1 = 0; ptr_lex2 = 0; ptr_lex3 = 0;
+ptr_f0 = 0; ptr_f1 = 0; ptr_f2 = 0; ptr_f3 = 0;
+ptr_f4 = 0; ptr_f5 = 0; ptr_f6 = 0; ptr_f7 = 0;
+
+damp_s0 = 0; damp_s1 = 0; damp_s2 = 0; damp_s3 = 0;
+damp_s4 = 0; damp_s5 = 0; damp_s6 = 0; damp_s7 = 0;
+hp_l = 0; hp_r = 0; lp_l = 0; lp_r = 0; lfo_phase = 0;
+last_preset = -1;
+
+// Mouse Drag State
+drag_knob = -1;
+drag_start_y = 0;
+drag_start_val = 0;
+last_click_time = 0;
+
+@slider
+slider1 != last_preset ? (
+  last_preset = slider1;
+  p = slider1;
+  p == 0 ? ( slider2=1.9; slider3=1.10; slider4=24; slider5=60;  slider6=14000; slider7=8000;  slider8=80; slider9=40; slider10=50; slider11=100; slider12=0; slider13=-6; );
+  p == 1 ? ( slider2=0.7; slider3=0.80; slider4=12; slider5=100; slider6=18000; slider7=12000; slider8=65; slider9=20; slider10=30; slider11=90;  slider12=0; slider13=-6; );
+  p == 2 ? ( slider2=3.8; slider3=1.45; slider4=40; slider5=50;  slider6=10000; slider7=5000;  slider8=85; slider9=55; slider10=60; slider11=120; slider12=0; slider13=-6; );
+  p == 3 ? ( slider2=2.0; slider3=1.05; slider4=18; slider5=80;  slider6=15000; slider7=9000;  slider8=90; slider9=30; slider10=45; slider11=100; slider12=0; slider13=-6; );
+  p == 4 ? ( slider2=0.5; slider3=0.65; slider4=8;  slider5=120; slider6=8000;  slider7=4500;  slider8=60; slider9=10; slider10=20; slider11=80;  slider12=0; slider13=-6; );
+  p == 5 ? ( slider2=1.1; slider3=0.85; slider4=15; slider5=90;  slider6=13000; slider7=8500;  slider8=70; slider9=25; slider10=35; slider11=95;  slider12=0; slider13=-6; );
+  p == 6 ? ( slider2=4.8; slider3=1.80; slider4=50; slider5=40;  slider6=8000;  slider7=3500;  slider8=95; slider9=70; slider10=70; slider11=140; slider12=0; slider13=-6; );
+  p == 7 ? ( slider2=1.5; slider3=0.95; slider4=15; slider5=80;  slider6=12000; slider7=7000;  slider8=75; slider9=30; slider10=40; slider11=100; slider12=0; slider13=-6; );
+  p == 8 ? ( slider2=0.8; slider3=0.75; slider4=10; slider5=100; slider6=16000; slider7=9500;  slider8=80; slider9=20; slider10=30; slider11=90;  slider12=0; slider13=-6; );
+  p == 9 ? ( slider2=2.6; slider3=1.25; slider4=28; slider5=70;  slider6=11000; slider7=6500;  slider8=85; slider9=45; slider10=50; slider11=110; slider12=0; slider13=-6; );
+  p == 10? ( slider2=2.4; slider3=1.20; slider4=32; slider5=50;  slider6=12000; slider7=7500;  slider8=80; slider9=50; slider10=55; slider11=115; slider12=0; slider13=-6; );
+  p == 11? ( slider2=1.4; slider3=0.95; slider4=18; slider5=80;  slider6=15000; slider7=10000; slider8=70; slider9=25; slider10=40; slider11=100; slider12=0; slider13=-6; );
+  p == 12? ( slider2=0.8; slider3=0.70; slider4=10; slider5=110; slider6=10000; slider7=6000;  slider8=60; slider9=15; slider10=25; slider11=85;  slider12=0; slider13=-6; );
+  p == 13? ( slider2=3.5; slider3=1.60; slider4=45; slider5=40;  slider6=9000;  slider7=4000;  slider8=90; slider9=60; slider10=65; slider11=130; slider12=0; slider13=-6; );
+  p == 14? ( slider2=1.8; slider3=1.00; slider4=28; slider5=75;  slider6=13500; slider7=8500;  slider8=85; slider9=35; slider10=45; slider11=105; slider12=0; slider13=-6; );
+  p == 15? ( slider2=4.2; slider3=1.90; slider4=45; slider5=35;  slider6=8500;  slider7=4500;  slider8=90; slider9=65; slider10=70; slider11=140; slider12=0; slider13=-6; );
+  p == 16? ( slider2=2.8; slider3=1.35; slider4=30; slider5=60;  slider6=12000; slider7=6500;  slider8=85; slider9=40; slider10=50; slider11=115; slider12=0; slider13=-6; );
+  p == 17? ( slider2=1.8; slider3=1.05; slider4=20; slider5=80;  slider6=14000; slider7=8000;  slider8=75; slider9=30; slider10=40; slider11=100; slider12=0; slider13=-6; );
+  p == 18? ( slider2=0.9; slider3=0.75; slider4=10; slider5=100; slider6=16000; slider7=10000; slider8=65; slider9=15; slider10=25; slider11=90;  slider12=0; slider13=-6; );
+  p == 19? ( slider2=3.1; slider3=1.50; slider4=35; slider5=50;  slider6=10500; slider7=5500;  slider8=85; slider9=50; slider10=60; slider11=125; slider12=0; slider13=-6; );
+  p == 20? ( slider2=2.5; slider3=1.25; slider4=25; slider5=65;  slider6=12500; slider7=7000;  slider8=80; slider9=40; slider10=50; slider11=110; slider12=0; slider13=-6; );
+  p == 21? ( slider2=2.1; slider3=1.15; slider4=20; slider5=75;  slider6=14000; slider7=8500;  slider8=75; slider9=35; slider10=45; slider11=105; slider12=0; slider13=-6; );
+  p == 22? ( slider2=2.3; slider3=1.20; slider4=22; slider5=70;  slider6=7500;  slider7=3200;  slider8=85; slider9=30; slider10=45; slider11=105; slider12=0; slider13=-6; );
+  p == 23? ( slider2=1.5; slider3=0.95; slider4=16; slider5=90;  slider6=15000; slider7=9000;  slider8=70; slider9=25; slider10=35; slider11=100; slider12=0; slider13=-6; );
+  p == 24? ( slider2=1.2; slider3=0.85; slider4=14; slider5=100; slider6=16500; slider7=10500; slider8=65; slider9=20; slider10=30; slider11=95;  slider12=0; slider13=-6; );
+  p == 25? ( slider2=0.8; slider3=0.70; slider4=10; slider5=100; slider6=18000; slider7=9000;  slider8=65; slider9=10; slider10=20; slider11=90;  slider12=0; slider13=-6; );
+  p == 26? ( slider2=1.6; slider3=1.00; slider4=20; slider5=80;  slider6=16000; slider7=7500;  slider8=70; slider9=15; slider10=40; slider11=100; slider12=0; slider13=-6; );
+  p == 27? ( slider2=2.6; slider3=1.30; slider4=30; slider5=60;  slider6=14000; slider7=6500;  slider8=75; slider9=20; slider10=50; slider11=115; slider12=0; slider13=-6; );
+  p == 28? ( slider2=4.2; slider3=1.80; slider4=45; slider5=40;  slider6=10000; slider7=5000;  slider8=80; slider9=30; slider10=65; slider11=135; slider12=0; slider13=-6; );
+  p == 29? ( slider2=2.8; slider3=1.40; slider4=35; slider5=50;  slider6=12000; slider7=6000;  slider8=78; slider9=25; slider10=55; slider11=120; slider12=0; slider13=-6; );
+  p == 30? ( slider2=2.3; slider3=1.20; slider4=25; slider5=70;  slider6=18000; slider7=11000; slider8=72; slider9=20; slider10=45; slider11=110; slider12=0; slider13=-6; );
+  p == 31? ( slider2=2.8; slider3=1.35; slider4=30; slider5=60;  slider6=15000; slider7=8000;  slider8=75; slider9=20; slider10=50; slider11=115; slider12=0; slider13=-6; );
+  p == 32? ( slider2=1.8; slider3=1.00; slider4=20; slider5=80;  slider6=16000; slider7=7000;  slider8=70; slider9=15; slider10=40; slider11=100; slider12=0; slider13=-6; );
+  p == 33? ( slider2=0.8; slider3=0.65; slider4=8;  slider5=120; slider6=18000; slider7=10000; slider8=60; slider9=10; slider10=20; slider11=85;  slider12=0; slider13=-6; );
+  p == 34? ( slider2=1.6; slider3=1.10; slider4=15; slider5=90;  slider6=17000; slider7=8500;  slider8=68; slider9=15; slider10=35; slider11=100; slider12=0; slider13=-6; );
+  p == 35? ( slider2=4.8; slider3=2.00; slider4=55; slider5=30;  slider6=9000;  slider7=4500;  slider8=85; slider9=35; slider10=70; slider11=140; slider12=0; slider13=-6; );
+  p == 36? ( slider2=2.1; slider3=1.15; slider4=25; slider5=70;  slider6=16000; slider7=9500;  slider8=73; slider9=20; slider10=45; slider11=110; slider12=0; slider13=-6; );
+  p == 37? ( slider2=1.9; slider3=1.10; slider4=18; slider5=85;  slider6=19000; slider7=12000; slider8=70; slider9=18; slider10=40; slider11=105; slider12=0; slider13=-6; );
+  p == 38? ( slider2=2.4; slider3=1.25; slider4=28; slider5=65;  slider6=14000; slider7=7800;  slider8=74; slider9=22; slider10=50; slider11=115; slider12=0; slider13=-6; );
+  p == 39? ( slider2=1.6; slider3=0.95; slider4=15; slider5=80;  slider6=11000; slider7=5500;  slider8=68; slider9=15; slider10=35; slider11=95;  slider12=0; slider13=-6; );
+);
+
+engine_mode = slider1 >= 25 ? 1 : 0;
+rt60 = slider2;
+size_scale = slider3;
+predelay_samples = min(MAX_PREDELAY, floor((slider4 / 1000) * srate));
+hp_coeff = exp(-2.0 * $pi * slider5 / srate);
+lp_coeff = exp(-2.0 * $pi * slider6 / srate);
+damp_coeff = exp(-2.0 * $pi * slider7 / srate);
+diff_coeff = (slider8 / 100) * 0.75;
+mod_depth = (slider9 / 100) * (0.001 * srate);
+er_late_bal = slider10 / 100;
+width = slider11 / 100;
+dry_gain = 10 ^ (slider12 / 20);
+wet_gain = 10 ^ (slider13 / 20);
+
+// FDN Coefficients Engine 0
+len_lex0 = floor(fdn_lex_base0 * size_scale);
+len_lex1 = floor(fdn_lex_base1 * size_scale);
+len_lex2 = floor(fdn_lex_base2 * size_scale);
+len_lex3 = floor(fdn_lex_base3 * size_scale);
+
+fb_lex0 = exp(-3.0 * (len_lex0 / srate) / rt60);
+fb_lex1 = exp(-3.0 * (len_lex1 / srate) / rt60);
+fb_lex2 = exp(-3.0 * (len_lex2 / srate) / rt60);
+fb_lex3 = exp(-3.0 * (len_lex3 / srate) / rt60);
+
+// FDN Coefficients Engine 1
+len_f0 = max(16, floor(f_base0 * size_scale * srate));
+len_f1 = max(16, floor(f_base1 * size_scale * srate));
+len_f2 = max(16, floor(f_base2 * size_scale * srate));
+len_f3 = max(16, floor(f_base3 * size_scale * srate));
+len_f4 = max(16, floor(f_base4 * size_scale * srate));
+len_f5 = max(16, floor(f_base5 * size_scale * srate));
+len_f6 = max(16, floor(f_base6 * size_scale * srate));
+len_f7 = max(16, floor(f_base7 * size_scale * srate));
+
+g0 = exp(-6.9078 * (len_f0 / srate) / rt60);
+g1 = exp(-6.9078 * (len_f1 / srate) / rt60);
+g2 = exp(-6.9078 * (len_f2 / srate) / rt60);
+g3 = exp(-6.9078 * (len_f3 / srate) / rt60);
+g4 = exp(-6.9078 * (len_f4 / srate) / rt60);
+g5 = exp(-6.9078 * (len_f5 / srate) / rt60);
+g6 = exp(-6.9078 * (len_f6 / srate) / rt60);
+g7 = exp(-6.9078 * (len_f7 / srate) / rt60);
+
+@sample
+inL = spl0; inR = spl1;
+
+// 1. Pre-Delay
+buf_predelay_l[ptr_predelay] = inL;
+buf_predelay_r[ptr_predelay] = inR;
+rd_pre = ptr_predelay - predelay_samples;
+rd_pre < 0 ? rd_pre += MAX_PREDELAY;
+pd_L = buf_predelay_l[rd_pre];
+pd_R = buf_predelay_r[rd_pre];
+ptr_predelay = (ptr_predelay + 1) % MAX_PREDELAY;
+mono_in = (pd_L + pd_R) * 0.5;
+
+// 2. Early Reflections / Diffusers
+ap_out0 = buf_ap0[ptr_ap0] - diff_coeff * mono_in; buf_ap0[ptr_ap0] = mono_in + diff_coeff * ap_out0; ptr_ap0 = (ptr_ap0 + 1) % ap_len0;
+ap_out1 = buf_ap1[ptr_ap1] - diff_coeff * ap_out0; buf_ap1[ptr_ap1] = ap_out0 + diff_coeff * ap_out1; ptr_ap1 = (ptr_ap1 + 1) % ap_len1;
+ap_out2 = buf_ap2[ptr_ap2] - diff_coeff * ap_out1; buf_ap2[ptr_ap2] = ap_out1 + diff_coeff * ap_out2; ptr_ap2 = (ptr_ap2 + 1) % ap_len2;
+ap_out3 = buf_ap3[ptr_ap3] - diff_coeff * ap_out2; buf_ap3[ptr_ap3] = ap_out2 + diff_coeff * ap_out3; ptr_ap3 = (ptr_ap3 + 1) % ap_len3;
+er_sig = ap_out3;
+
+engine_mode == 0 ? (
+  // ENGINE 0: Lexicon 4-Tank
+  lfo_phase += 1.0 / srate; lfo_phase > 1.0 ? lfo_phase -= 1.0;
+  mod1 = sin(2.0 * $pi * lfo_phase * 0.7) * mod_depth;
+  mod2 = cos(2.0 * $pi * lfo_phase * 0.9) * mod_depth;
+
+  r0 = buf_lex0[floor((ptr_lex0 - len_lex0 + mod1 + len_lex0 * 2) % len_lex0)];
+  r1 = buf_lex1[floor((ptr_lex1 - len_lex1 - mod2 + len_lex1 * 2) % len_lex1)];
+  r2 = buf_lex2[floor((ptr_lex2 - len_lex2 + mod2 + len_lex2 * 2) % len_lex2)];
+  r3 = buf_lex3[floor((ptr_lex3 - len_lex3 - mod1 + len_lex3 * 2) % len_lex3)];
+
+  damp_s0 = r0 * (1.0 - damp_coeff) + damp_s0 * damp_coeff;
+  damp_s1 = r1 * (1.0 - damp_coeff) + damp_s1 * damp_coeff;
+  damp_s2 = r2 * (1.0 - damp_coeff) + damp_s2 * damp_coeff;
+  damp_s3 = r3 * (1.0 - damp_coeff) + damp_s3 * damp_coeff;
+
+  m0 = damp_s0 * fb_lex0; m1 = damp_s1 * fb_lex1; m2 = damp_s2 * fb_lex2; m3 = damp_s3 * fb_lex3;
+  buf_lex0[ptr_lex0] = er_sig + (m0 + m1 + m2 + m3) * 0.5; ptr_lex0 = (ptr_lex0 + 1) % len_lex0;
+  buf_lex1[ptr_lex1] = er_sig + (m0 - m1 + m2 - m3) * 0.5; ptr_lex1 = (ptr_lex1 + 1) % len_lex1;
+  buf_lex2[ptr_lex2] = er_sig + (m0 + m1 - m2 - m3) * 0.5; ptr_lex2 = (ptr_lex2 + 1) % len_lex2;
+  buf_lex3[ptr_lex3] = er_sig + (m0 - m1 - m2 + m3) * 0.5; ptr_lex3 = (ptr_lex3 + 1) % len_lex3;
+
+  late_l = r0 - r2; late_r = r1 - r3;
+) : (
+  // ENGINE 1: M7 Hybrid 8-Tank
+  s0 = buf_fdn0[ptr_f0]; s1 = buf_fdn1[ptr_f1]; s2 = buf_fdn2[ptr_f2]; s3 = buf_fdn3[ptr_f3];
+  s4 = buf_fdn4[ptr_f4]; s5 = buf_fdn5[ptr_f5]; s6 = buf_fdn6[ptr_f6]; s7 = buf_fdn7[ptr_f7];
+
+  damp_s0 = s0 * (1 - damp_coeff) + damp_s0 * damp_coeff;
+  damp_s1 = s1 * (1 - damp_coeff) + damp_s1 * damp_coeff;
+  damp_s2 = s2 * (1 - damp_coeff) + damp_s2 * damp_coeff;
+  damp_s3 = s3 * (1 - damp_coeff) + damp_s3 * damp_coeff;
+  damp_s4 = s4 * (1 - damp_coeff) + damp_s4 * damp_coeff;
+  damp_s5 = s5 * (1 - damp_coeff) + damp_s5 * damp_coeff;
+  damp_s6 = s6 * (1 - damp_coeff) + damp_s6 * damp_coeff;
+  damp_s7 = s7 * (1 - damp_coeff) + damp_s7 * damp_coeff;
+
+  ds0 = damp_s0 * g0; ds1 = damp_s1 * g1; ds2 = damp_s2 * g2; ds3 = damp_s3 * g3;
+  ds4 = damp_s4 * g4; ds5 = damp_s5 * g5; ds6 = damp_s6 * g6; ds7 = damp_s7 * g7;
+
+  sum_s = (ds0 + ds1 + ds2 + ds3 + ds4 + ds5 + ds6 + ds7) * 0.25;
+  buf_fdn0[ptr_f0] = er_sig + ds0 - sum_s; ptr_f0 = (ptr_f0 + 1) % len_f0;
+  buf_fdn1[ptr_f1] = er_sig + ds1 - sum_s; ptr_f1 = (ptr_f1 + 1) % len_f1;
+  buf_fdn2[ptr_f2] = er_sig + ds2 - sum_s; ptr_f2 = (ptr_f2 + 1) % len_f2;
+  buf_fdn3[ptr_f3] = er_sig + ds3 - sum_s; ptr_f3 = (ptr_f3 + 1) % len_f3;
+  buf_fdn4[ptr_f4] = er_sig + ds4 - sum_s; ptr_f4 = (ptr_f4 + 1) % len_f4;
+  buf_fdn5[ptr_f5] = er_sig + ds5 - sum_s; ptr_f5 = (ptr_f5 + 1) % len_f5;
+  buf_fdn6[ptr_f6] = er_sig + ds6 - sum_s; ptr_f6 = (ptr_f6 + 1) % len_f6;
+  buf_fdn7[ptr_f7] = er_sig + ds7 - sum_s; ptr_f7 = (ptr_f7 + 1) % len_f7;
+
+  late_l = (s0 + s2 + s4 + s6) * 0.5; late_r = (s1 + s3 + s5 + s7) * 0.5;
+);
+
+// ER & Late Combination
+raw_l = er_sig * (1.0 - er_late_bal) + late_l * er_late_bal;
+raw_r = er_sig * (1.0 - er_late_bal) + late_r * er_late_bal;
+
+// Filters
+hp_l = raw_l - hp_coeff * hp_l; hp_r = raw_r - hp_coeff * hp_r;
+lp_l = hp_l + lp_coeff * (lp_l - hp_l); lp_r = hp_r + lp_coeff * (lp_r - hp_r);
+
+// M/S Width & Output
+mid = (lp_l + lp_r) * 0.5;
+side = (lp_l - lp_r) * 0.5 * width;
+wet_l = mid + side; wet_r = mid - side;
+
+spl0 = (inL * dry_gain) + (wet_l * wet_gain);
+spl1 = (inR * dry_gain) + (wet_r * wet_gain);
+
+@gfx 680 340
+// ----------------------------------------------------------------------------
+// VECTOR GUI ROUTINES
+// ----------------------------------------------------------------------------
+gfx_clear = 0x181A1F; // Dark charcoal background (Plates style)
+
+// Draw Top Header
+gfx_r = 0.88; gfx_g = 0.90; gfx_b = 0.95; gfx_a = 1.0;
+gfx_x = 22; gfx_y = 12; gfx_setfont(1, "Courier New", 18, 'b');
+gfx_drawstr("HALLS");
+
+// Preset Dropdown Box
+bx = 180; by = 8; bw = 380; bh = 26;
+gfx_r = 0.22; gfx_g = 0.25; gfx_b = 0.30; gfx_rect(bx, by, bw, bh, 1);
+gfx_r = 0.40; gfx_g = 0.45; gfx_b = 0.52; gfx_rect(bx, by, bw, bh, 0);
+
+gfx_r = 0.85; gfx_g = 0.90; gfx_b = 0.95; gfx_x = bx + 12; gfx_y = by + 6;
+gfx_setfont(1, "Courier New", 12, 'b');
+slider1 == 0 ? gfx_drawstr("00: 480L Large Hall") :
+slider1 == 1 ? gfx_drawstr("01: 480L Large Stage") :
+slider1 == 2 ? gfx_drawstr("02: 480L Medium Hall") :
+slider1 == 3 ? gfx_drawstr("03: 480L Medium Stage") :
+slider1 == 4 ? gfx_drawstr("04: 480L Small Hall") :
+slider1 == 5 ? gfx_drawstr("05: 480L Small Stage") :
+slider1 == 6 ? gfx_drawstr("06: 480L Large Church") :
+slider1 == 7 ? gfx_drawstr("07: 480L Small Church") :
+slider1 == 8 ? gfx_drawstr("08: 480L Jazz Hall") :
+slider1 == 9 ? gfx_drawstr("09: 480L Auto Park") :
+slider1 == 10? gfx_drawstr("10: Lexicon 300 Dance Hall") :
+slider1 == 11? gfx_drawstr("11: Lexicon 300 Large Hall") :
+slider1 == 12? gfx_drawstr("12: Lexicon 300 Lecture Hall") :
+slider1 == 13? gfx_drawstr("13: Lexicon 300 Medium Hall") :
+slider1 == 14? gfx_drawstr("14: Lexicon 300 Small Hall") :
+slider1 == 15? gfx_drawstr("15: EM2450 Hall Huge") :
+slider1 == 16? gfx_drawstr("16: EM2450 Hall Large") :
+slider1 == 17? gfx_drawstr("17: EM2450 Hall Medium") :
+slider1 == 18? gfx_drawstr("18: EM2450 Hall Small") :
+slider1 == 19? gfx_drawstr("19: EM2460 Hall Large 1") :
+slider1 == 20? gfx_drawstr("20: EM2460 Hall Large 2") :
+slider1 == 21? gfx_drawstr("21: EM2460 Hall Large 3") :
+slider1 == 22? gfx_drawstr("22: EM2460 Hall Large Damped") :
+slider1 == 23? gfx_drawstr("23: EM2460 Hall Medium 1") :
+slider1 == 24? gfx_drawstr("24: EM2460 Hall Medium 2") :
+slider1 == 25? gfx_drawstr("25: 248 Hall Small") :
+slider1 == 26? gfx_drawstr("26: 248 Hall Medium") :
+slider1 == 27? gfx_drawstr("27: 248 Hall Large") :
+slider1 == 28? gfx_drawstr("28: 248 Hall Huge") :
+slider1 == 29? gfx_drawstr("29: 250 Concert Hall") :
+slider1 == 30? gfx_drawstr("30: 250 Concert Hall Bright") :
+slider1 == 31? gfx_drawstr("31: M7 Large Hall 01") :
+slider1 == 32? gfx_drawstr("32: M7 Medium Hall 02") :
+slider1 == 33? gfx_drawstr("33: M7 Small Hall 03") :
+slider1 == 34? gfx_drawstr("34: M7 Large & Near 04") :
+slider1 == 35? gfx_drawstr("35: M7 Cathedral") :
+slider1 == 36? gfx_drawstr("36: M7 Vocal Hall") :
+slider1 == 37? gfx_drawstr("37: M7 Bright Stage") :
+slider1 == 38? gfx_drawstr("38: M7 Scoring Hall") :
+slider1 == 39? gfx_drawstr("39: M7 Wood Hall") :
+gfx_drawstr("40: Custom / Manual Controls");
+
+// Navigation arrows
+gfx_r = 0.8; gfx_g = 0.8; gfx_b = 0.8;
+gfx_x = bx + bw + 10; gfx_y = by + 6; gfx_drawstr("<");
+gfx_x = bx + bw + 25; gfx_y = by + 6; gfx_drawstr(">");
+
+// Main Banner Box (Plates Style)
+gfx_r = 0.18; gfx_g = 0.20; gfx_b = 0.24; gfx_rect(20, 48, gfx_w - 40, 36, 1);
+gfx_r = 0.85; gfx_g = 0.90; gfx_b = 0.95; 
+gfx_setfont(1, "Courier New", 13, 'b');
+#banner_txt = engine_mode == 0 ? "LEXICON 480L / 300 ALGORITHMIC HALL ENGINE" : "BRICASTI M7 / 248 / 250 HYBRID HALL MODELING";
+gfx_measurestr(#banner_txt, bw_w, bw_h);
+gfx_x = (gfx_w * 0.5) - (bw_w * 0.5); gfx_y = 59;
+gfx_drawstr(#banner_txt);
+
+// ----------------------------------------------------------------------------
+// ROTARY KNOB FUNCTION (WITH LOCAL VARS & CORRECTED time_precise)
+// ----------------------------------------------------------------------------
+function draw_knob(kx, ky, kr, val, min_v, max_v, default_v, label_str, val_mode, knob_id) 
+local(dy, range, norm, ang, lx, ly, lw, lh, vw, vh)
+(
+  // Mouse Interaction Logic
+  mouse_x >= kx - kr && mouse_x <= kx + kr && mouse_y >= ky - kr && mouse_y <= ky + kr ? (
+    (mouse_cap & 1) && drag_knob == -1 ? (
+      drag_knob = knob_id;
+      drag_start_y = mouse_y;
+      drag_start_val = val;
+
+      // Double click detection with time_precise()
+      time_precise() - last_click_time < 0.25 ? (
+        val = default_v;
+        drag_knob = -1;
+      );
+      last_click_time = time_precise();
+    );
+  );
+
+  drag_knob == knob_id ? (
+    (mouse_cap & 1) ? (
+      dy = drag_start_y - mouse_y;
+      range = max_v - min_v;
+      val = drag_start_val + (dy * (range / 150));
+      val = max(min_v, min(max_v, val));
+    ) : (
+      drag_knob = -1;
+    );
+  );
+
+  // Angle Calculation (-135 to +135 degrees)
+  norm = (val - min_v) / (max_v - min_v);
+  ang = -2.35619 + norm * 4.71239;
+
+  // Outer Circle
+  gfx_r = 0.22; gfx_g = 0.26; gfx_b = 0.32; gfx_a = 1.0;
+  gfx_circle(kx, ky, kr, 0);
+
+  // Indicator Line
+  lx = kx + sin(ang) * (kr - 3);
+  ly = ky - cos(ang) * (kr - 3);
+  gfx_r = 0.65; gfx_g = 0.85; gfx_b = 0.80;
+  gfx_line(kx, ky, lx, ly, 1);
+
+  // Labels
+  gfx_r = 0.85; gfx_g = 0.88; gfx_b = 0.92;
+  gfx_setfont(1, "Courier New", 12, 'b');
+  gfx_measurestr(label_str, lw, lh);
+  gfx_x = kx - (lw * 0.5); gfx_y = ky + kr + 6;
+  gfx_drawstr(label_str);
+
+  // Formatted Value Output
+  val_mode == 0 ? sprintf(#vstr, "%.2f s", val) :
+  val_mode == 1 ? sprintf(#vstr, "%.0f %%", val) :
+  val_mode == 2 ? sprintf(#vstr, "%d ms", val) :
+  val_mode == 3 ? ( val >= 1000 ? sprintf(#vstr, "%.1f k", val/1000) : sprintf(#vstr, "%d Hz", val) ) :
+  val_mode == 4 ? sprintf(#vstr, "%d %%", val) :
+  val_mode == 5 ? sprintf(#vstr, "%.1f dB", val) :
+  sprintf(#vstr, "%.2f", val);
+
+  gfx_r = 0.65; gfx_g = 0.85; gfx_b = 0.80;
+  gfx_setfont(1, "Courier New", 11);
+  gfx_measurestr(#vstr, vw, vh);
+  gfx_x = kx - (vw * 0.5); gfx_y = ky + kr + 19;
+  gfx_drawstr(#vstr);
+
+  val; // return updated value
+);
+
+// ----------------------------------------------------------------------------
+// DRAW 12 KNOBS GRID (2 ROWS x 6 COLS)
+// ----------------------------------------------------------------------------
+row1_y = 135;
+row2_y = 245;
+col_w = 105;
+start_x = 62;
+
+// Row 1
+slider2  = draw_knob(start_x + col_w * 0, row1_y, 22, slider2,  0.2, 8.0, 2.0, "Decay", 0, 2);
+slider3  = draw_knob(start_x + col_w * 1, row1_y, 22, slider3,  0.5, 2.0, 1.0, "Size", 1, 3);
+slider4  = draw_knob(start_x + col_w * 2, row1_y, 22, slider4,  0, 250, 25,   "Pre-delay", 2, 4);
+slider5  = draw_knob(start_x + col_w * 3, row1_y, 22, slider5,  20, 500, 80,  "Low Cut", 3, 5);
+slider6  = draw_knob(start_x + col_w * 4, row1_y, 22, slider6,  2000, 20000, 14000, "High Cut", 3, 6);
+slider7  = draw_knob(start_x + col_w * 5, row1_y, 22, slider7,  800, 20000, 7500, "Hi Damping", 3, 7);
+
+// Row 2
+slider8  = draw_knob(start_x + col_w * 0, row2_y, 22, slider8,  0, 100, 75,  "Diffusion", 4, 8);
+slider9  = draw_knob(start_x + col_w * 1, row2_y, 22, slider9,  0, 100, 35,  "Mod Depth", 4, 9);
+slider10 = draw_knob(start_x + col_w * 2, row2_y, 22, slider10, 0, 100, 50,  "ER/Late", 4, 10);
+slider11 = draw_knob(start_x + col_w * 3, row2_y, 22, slider11, 0, 200, 100, "Width", 4, 11);
+slider12 = draw_knob(start_x + col_w * 4, row2_y, 22, slider12, -60, 12, 0,  "Gain", 5, 12);
+slider13 = draw_knob(start_x + col_w * 5, row2_y, 22, slider13, -60, 12, -6, "Mix", 5, 13);
+
+// Dropdown click handler
+(mouse_cap & 1) && !(last_cap & 1) ? (
+  mouse_x >= bx && mouse_x <= bx + bw && mouse_y >= by && mouse_y <= by + bh ? (
+    sel = gfx_showmenu("00: 480L Large Hall|01: 480L Large Stage|02: 480L Medium Hall|03: 480L Medium Stage|04: 480L Small Hall|05: 480L Small Stage|06: 480L Large Church|07: 480L Small Church|08: 480L Jazz Hall|09: 480L Auto Park|10: Lexicon 300 Dance Hall|11: Lexicon 300 Large Hall|12: Lexicon 300 Lecture Hall|13: Lexicon 300 Medium Hall|14: Lexicon 300 Small Hall|15: EM2450 Hall Huge|16: EM2450 Hall Large|17: EM2450 Hall Medium|18: EM2450 Hall Small|19: EM2460 Hall Large 1|20: EM2460 Hall Large 2|21: EM2460 Hall Large 3|22: EM2460 Hall Large Damped|23: EM2460 Hall Medium 1|24: EM2460 Hall Medium 2|25: 248 Hall Small|26: 248 Hall Medium|27: 248 Hall Large|28: 248 Hall Huge|29: 250 Concert Hall|30: 250 Concert Hall Bright|31: M7 Large Hall 01|32: M7 Medium Hall 02|33: M7 Small Hall 03|34: M7 Large & Near 04|35: M7 Cathedral|36: M7 Vocal Hall|37: M7 Bright Stage|38: M7 Scoring Hall|39: M7 Wood Hall|40: Custom / Manual Controls");
+    sel > 0 ? slider1 = sel - 1;
+  );
+  // Arrow clicks
+  mouse_x >= bx + bw + 5 && mouse_x <= bx + bw + 18 && mouse_y >= by && mouse_y <= by + bh ? ( slider1 = max(0, slider1 - 1); );
+  mouse_x >= bx + bw + 20 && mouse_x <= bx + bw + 35 && mouse_y >= by && mouse_y <= by + bh ? ( slider1 = min(40, slider1 + 1); );
+);
+
+last_cap = mouse_cap;

@@ -1,0 +1,322 @@
+desc:H-Delay Hybrid Clone with Fixed Ping-Pong & Tap Tempo (JSFX God Tier)
+// Clone exacto del procesador Waves H-Delay con corrección de topología Ping-Pong y Tap Tempo.
+
+// -----------------------------------------------------------------------------
+// SLIDERS & CONTROLES
+// -----------------------------------------------------------------------------
+slider1:250<1,3500,1>Delay Time (ms)
+slider2:0<0,2,1{Host Sync,BPM Sync,MS Sync}>Sync Mode
+slider3:8<0,17,1{1/64,1/32T,1/32,1/16T,1/32D,1/16,1/8T,1/16D,1/8,1/4T,1/8D,1/4,1/2T,1/4D,1/2,1/1T,1/2D,1/1}>Note Division
+slider4:120<30,300,0.1>Manual BPM
+slider5:60<0,200,0.1>Feedback (%)
+slider6:0<0,1,1{Off,On}>Ping Pong
+slider7:0<0,1,1{Normal,Invert}>Phase Rev L
+slider8:0<0,1,1{Normal,Invert}>Phase Rev R
+slider9:20<20,20000,1:log>HP Filter (Hz)
+slider10:20000<20,20000,1:log>LP Filter (Hz)
+slider11:0<0,100,0.1>Modulation Depth
+slider12:0.1<0.1,6000,0.1:log>Modulation Rate (Hz)
+slider13:2<0,4,1{Off,Mode 1 (50Hz Analog),Mode 2 (60Hz Analog),Mode 3 (50Hz Clean),Mode 4 (60Hz Clean)}>Analog Mode
+slider14:0<0,1,1{Off,On}>LoFi Mode
+slider15:100<0,100,0.1>Mix Dry/Wet (%)
+slider16:0<-18,18,0.1>Output Trim (dB)
+slider17:0<0,1,1{Trigger,Tap!}>Tap Tempo (MIDI/Slider Trigger)
+
+in_pin:Left
+in_pin:Right
+out_pin:Left
+out_pin:Right
+
+@init
+MAX_DELAY_SAMPLES = 800000;
+buf_l = 0;
+buf_r = MAX_DELAY_SAMPLES + 10;
+write_pos = 0;
+
+curr_delay_l = 1000;
+curr_delay_r = 1000;
+
+lfo_phase = 0;
+hum_phase = 0;
+
+lofi_counter = 0;
+lofi_hold_l = 0;
+lofi_hold_r = 0;
+
+last_tap_time = 0;
+tap_interval = 0;
+tap_count = 0;
+flash_counter = 0;
+
+function do_tap()
+local(now, dt, calculated_bpm)
+(
+  now = time_precise();
+  dt = now - last_tap_time;
+  
+  (dt > 0.08 && dt < 3.0) ? (
+    tap_count > 0 ? (
+      tap_interval = tap_interval * 0.4 + dt * 0.6;
+    ) : (
+      tap_interval = dt;
+    );
+    tap_count += 1;
+    
+    calculated_bpm = 60.0 / tap_interval;
+    calculated_bpm = min(max(calculated_bpm, 30), 300);
+    
+    slider4 = calculated_bpm;
+    slider1 = min(max(tap_interval * 1000, 1), 3500);
+    
+    slider2 == 0 ? slider2 = 1;
+    
+    slider_automate(slider4);
+    slider_automate(slider1);
+    slider_automate(slider2);
+  ) : (
+    tap_count = 0;
+    tap_interval = 0;
+  );
+  
+  last_tap_time = now;
+  flash_counter = srate * 0.15;
+);
+
+function interpolate_hermite(y0, y1, y2, y3, frac)
+local(a0, a1, a2, a3)
+(
+  a0 = y3 - y2 - y0 + y1;
+  a1 = y0 - y1 - a0;
+  a2 = y2 - y0;
+  a3 = y1;
+  ((a0 * frac + a1) * frac + a2) * frac + a3;
+);
+
+function svf_hp(x, cutoff, Q)
+local(g, k, hp, bp, lp)
+instance(ic1eq, ic2eq)
+(
+  g = tan($pi * cutoff / srate);
+  k = 1 / Q;
+  hp = (x - (2 * k + g) * ic1eq - ic2eq) / (1 + 2 * k * g + g * g);
+  bp = g * hp + ic1eq;
+  ic1eq = g * hp + bp;
+  lp = g * bp + ic2eq;
+  ic2eq = g * bp + lp;
+  hp;
+);
+
+function svf_lp(x, cutoff, Q)
+local(g, k, hp, bp, lp)
+instance(ic1eq, ic2eq)
+(
+  g = tan($pi * cutoff / srate);
+  k = 1 / Q;
+  hp = (x - (2 * k + g) * ic1eq - ic2eq) / (1 + 2 * k * g + g * g);
+  bp = g * hp + ic1eq;
+  ic1eq = g * hp + bp;
+  lp = g * bp + ic2eq;
+  ic2eq = g * bp + lp;
+  lp;
+);
+
+function analog_saturate(x, drive)
+local(abs_x)
+(
+  x *= drive;
+  abs_x = abs(x);
+  abs_x < 1 ? x * (1 - (abs_x * abs_x) / 3) : (x > 0 ? 0.6666 : -0.6666);
+);
+
+@slider
+slider17 ? (
+  do_tap();
+  slider17 = 0;
+  slider_automate(slider17);
+);
+
+note_mult = 0;
+slider3 == 0  ? note_mult = 1/16 :
+slider3 == 1  ? note_mult = 1/24 :
+slider3 == 2  ? note_mult = 1/8 :
+slider3 == 3  ? note_mult = 1/12 :
+slider3 == 4  ? note_mult = 3/16 :
+slider3 == 5  ? note_mult = 1/4 :
+slider3 == 6  ? note_mult = 1/6 :
+slider3 == 7  ? note_mult = 3/8 :
+slider3 == 8  ? note_mult = 1/2 :
+slider3 == 9  ? note_mult = 1/3 :
+slider3 == 10 ? note_mult = 3/4 :
+slider3 == 11 ? note_mult = 1.0 :
+slider3 == 12 ? note_mult = 2/3 :
+slider3 == 13 ? note_mult = 1.5 :
+slider3 == 14 ? note_mult = 2.0 :
+slider3 == 15 ? note_mult = 4/3 :
+slider3 == 16 ? note_mult = 3.0 :
+slider3 == 17 ? note_mult = 4.0;
+
+bpm_active = (slider2 == 0) ? (tempo > 0 ? tempo : 120) : (slider2 == 1 ? slider4 : 120);
+
+slider2 == 2 ? (
+  target_delay_ms = slider1;
+) : (
+  target_delay_ms = (60000 / bpm_active) * note_mult;
+);
+
+target_delay_ms = min(max(target_delay_ms, 1), 3500);
+target_delay_samples = (target_delay_ms / 1000) * srate;
+
+fb_gain = slider5 / 100;
+wet_gain = slider15 / 100;
+dry_gain = 1 - wet_gain;
+out_trim = 10 ^ (slider16 / 20);
+
+phase_l_mult = slider7 ? -1 : 1;
+phase_r_mult = slider8 ? -1 : 1;
+
+tape_glide_coeff = exp(-1.0 / (srate * 0.04));
+
+@block
+
+@sample
+flash_counter > 0 ? flash_counter -= 1;
+
+in_l = spl0;
+in_r = spl1;
+
+// 1. Generador LFO
+lfo_inc = slider12 / srate;
+lfo_phase += lfo_inc;
+lfo_phase >= 1.0 ? lfo_phase -= 1.0;
+
+lfo_tri = lfo_phase < 0.5 ? (4 * lfo_phase - 1) : (3 - 4 * lfo_phase);
+mod_samples = lfo_tri * (slider11 / 100) * (0.015 * srate);
+
+dest_delay_l = target_delay_samples + mod_samples;
+dest_delay_r = target_delay_samples - mod_samples;
+
+// 2. Glide de cinta
+curr_delay_l = dest_delay_l + tape_glide_coeff * (curr_delay_l - dest_delay_l);
+curr_delay_r = dest_delay_r + tape_glide_coeff * (curr_delay_r - dest_delay_r);
+
+// 3. Lectura de buffers con Interpolación Hermite
+read_pos_l = write_pos - curr_delay_l;
+read_pos_l < 0 ? read_pos_l += MAX_DELAY_SAMPLES;
+i_l = floor(read_pos_l);
+f_l = read_pos_l - i_l;
+
+p0_l = buf_l[(i_l - 1 + MAX_DELAY_SAMPLES) % MAX_DELAY_SAMPLES];
+p1_l = buf_l[i_l % MAX_DELAY_SAMPLES];
+p2_l = buf_l[(i_l + 1) % MAX_DELAY_SAMPLES];
+p3_l = buf_l[(i_l + 2) % MAX_DELAY_SAMPLES];
+delay_out_l = interpolate_hermite(p0_l, p1_l, p2_l, p3_l, f_l);
+
+read_pos_r = write_pos - curr_delay_r;
+read_pos_r < 0 ? read_pos_r += MAX_DELAY_SAMPLES;
+i_r = floor(read_pos_r);
+f_r = read_pos_r - i_r;
+
+p0_r = buf_r[(i_r - 1 + MAX_DELAY_SAMPLES) % MAX_DELAY_SAMPLES];
+p1_r = buf_r[i_r % MAX_DELAY_SAMPLES];
+p2_r = buf_r[(i_r + 1) % MAX_DELAY_SAMPLES];
+p3_r = buf_r[(i_r + 2) % MAX_DELAY_SAMPLES];
+delay_out_r = interpolate_hermite(p0_r, p1_r, p2_r, p3_r, f_r);
+
+// 4. Modo LoFi
+slider14 ? (
+  lofi_counter += 1;
+  lofi_counter >= 2 ? (
+    lofi_counter = 0;
+    lofi_hold_l = floor(delay_out_l * 512.0) / 512.0;
+    lofi_hold_r = floor(delay_out_r * 512.0) / 512.0;
+  );
+  delay_out_l = lofi_hold_l;
+  delay_out_r = lofi_hold_r;
+);
+
+// 5. Filtros HPF y LPF
+delay_out_l = hp_l.svf_hp(delay_out_l, slider9, 0.707);
+delay_out_r = hp_r.svf_hp(delay_out_r, slider9, 0.707);
+
+delay_out_l = lp_l.svf_lp(delay_out_l, slider10, 0.707);
+delay_out_r = lp_r.svf_lp(delay_out_r, slider10, 0.707);
+
+// 6. Sección Analógica
+slider13 > 0 ? (
+  hum_freq = (slider13 == 1 || slider13 == 3) ? 50 : 60;
+  hum_inc = hum_freq / srate;
+  hum_phase += hum_inc;
+  hum_phase >= 1.0 ? hum_phase -= 1.0;
+  
+  hum_signal = (sin(2 * $pi * hum_phase) * 0.00008) + (sin(4 * $pi * hum_phase) * 0.00003);
+  
+  delay_out_l += hum_signal;
+  delay_out_r += hum_signal;
+  
+  drive_val = (slider13 == 1 || slider13 == 2) ? 1.4 : 1.1;
+  delay_out_l = analog_saturate(delay_out_l, drive_val);
+  delay_out_r = analog_saturate(delay_out_r, drive_val);
+);
+
+// 7. Procesamiento de Feedback y Escritura en Buffer (CORRECCIÓN PING-PONG)
+fb_l_processed = analog_saturate(delay_out_l * fb_gain, 1.0);
+fb_r_processed = analog_saturate(delay_out_r * fb_gain, 1.0);
+
+slider6 ? (
+  // TOPOLOGÍA PING-PONG CORREGIDA:
+  // La entrada se suma a Mono y se inyecta ÚNICAMENTE en el canal Izquierdo.
+  // El canal Derecho no recibe entrada directa; solo recibe el feedback procesado del canal Izquierdo.
+  // En la siguiente repetición, el Izquierdo recibe el feedback del Derecho.
+  in_mono = (in_l + in_r) * 0.5;
+  
+  buf_l[write_pos] = in_mono + fb_r_processed;
+  buf_r[write_pos] = fb_l_processed;
+) : (
+  // Modo Estéreo Estándar
+  buf_l[write_pos] = in_l + fb_l_processed;
+  buf_r[write_pos] = in_r + fb_r_processed;
+);
+
+write_pos = (write_pos + 1) % MAX_DELAY_SAMPLES;
+
+// 8. Fase y Mezcla Final
+wet_l = delay_out_l * phase_l_mult;
+wet_r = delay_out_r * phase_r_mult;
+
+out_l = (in_l * dry_gain) + (wet_l * wet_gain);
+out_r = (in_r * dry_gain) + (wet_r * wet_gain);
+
+spl0 = out_l * out_trim;
+spl1 = out_r * out_trim;
+
+// -----------------------------------------------------------------------------
+// INTERFAZ GRÁFICA (@gfx)
+// -----------------------------------------------------------------------------
+@gfx 220 70
+gfx_clear = 0x1E1E24;
+
+btn_x = 20; btn_y = 15; btn_w = 180; btn_h = 40;
+
+flash_counter > 0 ? (
+  gfx_r = 0.85; gfx_g = 0.22; gfx_b = 0.20;
+) : (
+  gfx_r = 0.25; gfx_g = 0.28; gfx_b = 0.35;
+);
+
+gfx_rect(btn_x, btn_y, btn_w, btn_h);
+
+gfx_r = 0.6; gfx_g = 0.65; gfx_b = 0.75;
+gfx_line(btn_x, btn_y, btn_x + btn_w, btn_y);
+gfx_line(btn_x, btn_y + btn_h, btn_x + btn_w, btn_y + btn_h);
+gfx_line(btn_x, btn_y, btn_x, btn_y + btn_h);
+gfx_line(btn_x + btn_w, btn_y, btn_x + btn_w, btn_y + btn_h);
+
+gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0;
+gfx_x = btn_x + 52; gfx_y = btn_y + 14;
+gfx_drawstr("TAP TEMPO");
+
+is_hover = mouse_x >= btn_x && mouse_x <= (btn_x + btn_w) && mouse_y >= btn_y && mouse_y <= (btn_y + btn_h);
+(mouse_cap & 1) && !last_mouse_cap && is_hover ? (
+  do_tap();
+);
+last_mouse_cap = mouse_cap & 1;

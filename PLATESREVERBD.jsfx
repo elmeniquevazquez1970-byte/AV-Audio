@@ -1,0 +1,395 @@
+desc:  Plates Reverbs (EMT 140 & 240) Author : Adrian Vazquez
+
+slider1:3.0<0.2,30,0.01>Decay - RT60 (s)
+slider2:30<0,100,0.1>Mix (%)
+slider3:80<20,1000,1:log>Low Cut (Hz)
+slider4:6500<1000,20000,10:log>High Cut / Damp (Hz)
+slider5:100<50,200,1>Plate Area (%)
+slider6:50<0,100,1>Plate Tension (%)
+slider7:0<0,100,1>Drive (%)
+slider8:0<0,500,1>Pre-delay (ms)
+slider9:100<0,100,1>Width (%)
+slider10:0<-20,20,0.1>Reverb Gain (dB)
+slider11:0<0,4,1{EMT 140 Bright,EMT 140 Warm,EMT 140 Dark,EMT 240 Gold Foil,EMT Hybrid Studio}>Model Preset
+slider12:75<0,100,1>Diffusion (%)
+slider13:30<0,100,1>Mod Depth (%)
+slider14:0.85<0.1,5.0,0.05>Mod Rate (Hz)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+freemem = 0;
+
+predelay_buf = freemem; freemem += 32000;
+
+in_ap1_buf = freemem; freemem += 4000;
+in_ap2_buf = freemem; freemem += 4000;
+in_ap3_buf = freemem; freemem += 4000;
+in_ap4_buf = freemem; freemem += 4000;
+
+tank_ap1_l_buf = freemem; freemem += 8000;
+tank_del1_l_buf = freemem; freemem += 48000;
+tank_ap2_l_buf = freemem; freemem += 8000;
+tank_del2_l_buf = freemem; freemem += 48000;
+
+tank_ap1_r_buf = freemem; freemem += 8000;
+tank_del1_r_buf = freemem; freemem += 48000;
+tank_ap2_r_buf = freemem; freemem += 8000;
+tank_del2_r_buf = freemem; freemem += 48000;
+
+ptr_pd = 0;
+ptr_in_ap1 = 0; ptr_in_ap2 = 0; ptr_in_ap3 = 0; ptr_in_ap4 = 0;
+ptr_t_ap1_l = 0; ptr_t_del1_l = 0; ptr_t_ap2_l = 0; ptr_t_del2_l = 0;
+ptr_t_ap1_r = 0; ptr_t_del1_r = 0; ptr_t_ap2_r = 0; ptr_t_del2_r = 0;
+
+lfo_phase = 0;
+tank_l_out = 0; tank_r_out = 0;
+damp_l = 0; damp_r = 0;
+hp_l = 0; hp_r = 0;
+lc_lp = 0;
+
+active_knob = 0;
+
+function process_allpass(in_val, buf_off, ptr_var*, len, g) local(delay_out, w) (
+  delay_out = buf_off[ptr_var];
+  w = in_val + g * delay_out;
+  buf_off[ptr_var] = w;
+  ptr_var += 1;
+  ptr_var >= len ? ptr_var = 0;
+  delay_out - g * w;
+);
+
+function process_allpass_mod(in_val, buf_off, ptr_var*, len, max_buf, mod_val, g) local(rd_ptr, r_int, r_frac, d1, d2, delay_out, w) (
+  rd_ptr = ptr_var - len + mod_val;
+  while (rd_ptr < 0) ( rd_ptr += max_buf; );
+  
+  r_int = rd_ptr|0;
+  r_frac = rd_ptr - r_int;
+  
+  d1 = buf_off[r_int % max_buf];
+  d2 = buf_off[(r_int + 1) % max_buf];
+  delay_out = d1 + r_frac * (d2 - d1);
+  
+  w = in_val + g * delay_out;
+  buf_off[ptr_var] = w;
+  ptr_var += 1;
+  ptr_var >= max_buf ? ptr_var = 0;
+  delay_out - g * w;
+);
+
+function recalc_params() (
+  preset = slider11;
+  
+  preset == 0 ? ( decay_mult = 1.00; preset_max_hc = 16000; g_in_ap = 0.73; g_tank_ap = 0.55; r_c=0.20; g_c=0.80; b_c=0.75; ) : // EMT 140 Bright
+  preset == 1 ? ( decay_mult = 0.95; preset_max_hc = 9500;  g_in_ap = 0.70; g_tank_ap = 0.52; r_c=0.85; g_c=0.55; b_c=0.30; ) : // EMT 140 Warm
+  preset == 2 ? ( decay_mult = 0.90; preset_max_hc = 5500;  g_in_ap = 0.68; g_tank_ap = 0.50; r_c=0.40; g_c=0.45; b_c=0.55; ) : // EMT 140 Dark
+  preset == 3 ? ( decay_mult = 1.25; preset_max_hc = 5000;  g_in_ap = 0.76; g_tank_ap = 0.60; r_c=0.95; g_c=0.75; b_c=0.20; ) : // EMT 240 Gold Foil
+                ( decay_mult = 1.08; preset_max_hc = 12000; g_in_ap = 0.72; g_tank_ap = 0.54; r_c=0.70; g_c=0.80; b_c=0.75; );  // EMT Hybrid
+
+  predelay_samples = (slider8 * 0.001 * srate)|0;
+  
+  // Factor de Área
+  area_scale = (slider5 * 0.01) * (srate / 44100);
+  
+  // Factor de Tensión
+  tension_factor = slider6 * 0.01;
+  g_tank_ap_mod = g_tank_ap * (0.85 + tension_factor * 0.30);
+  
+  preset == 3 ? (
+    // Base EMT 240
+    len_in_ap1 = max(1, (131 * area_scale)|0);
+    len_in_ap2 = max(1, (97  * area_scale)|0);
+    len_in_ap3 = max(1, (313 * area_scale)|0);
+    len_in_ap4 = max(1, (233 * area_scale)|0);
+
+    len_t_ap1_l  = max(1, (613  * area_scale)|0);
+    len_t_del1_l = max(1, (4219 * area_scale)|0);
+    len_t_ap2_l  = max(1, (1663 * area_scale)|0);
+    len_t_del2_l = max(1, (3581 * area_scale)|0);
+
+    len_t_ap1_r  = max(1, (811  * area_scale)|0);
+    len_t_del1_r = max(1, (4021 * area_scale)|0);
+    len_t_ap2_r  = max(1, (2447 * area_scale)|0);
+    len_t_del2_r = max(1, (3089 * area_scale)|0);
+  ) : (
+    // Base EMT 140
+    len_in_ap1 = max(1, (211 * area_scale)|0);
+    len_in_ap2 = max(1, (157 * area_scale)|0);
+    len_in_ap3 = max(1, (563 * area_scale)|0);
+    len_in_ap4 = max(1, (409 * area_scale)|0);
+
+    len_t_ap1_l  = max(1, (997  * area_scale)|0);
+    len_t_del1_l = max(1, (6619 * area_scale)|0);
+    len_t_ap2_l  = max(1, (2671 * area_scale)|0);
+    len_t_del2_l = max(1, (5527 * area_scale)|0);
+
+    len_t_ap1_r  = max(1, (1343 * area_scale)|0);
+    len_t_del1_r = max(1, (6263 * area_scale)|0);
+    len_t_ap2_r  = max(1, (3931 * area_scale)|0);
+    len_t_del2_r = max(1, (4691 * area_scale)|0);
+  );
+
+  rt60 = max(0.1, slider1 * decay_mult);
+  feedback = exp(-6.9077 * (len_t_del1_l / srate) / rt60);
+  feedback = min(0.94, max(0.05, feedback));
+
+  // Low Cut de Entrada
+  lc_fc = max(20, slider3);
+  lc_coef = 1.0 - exp(-2 * $pi * lc_fc / srate);
+
+  // Amortiguación de agudos
+  hc_effective = min(srate * 0.45, min(slider4 * (0.8 + tension_factor * 0.4), preset_max_hc));
+  damp_coef = 1.0 - exp(-2 * $pi * hc_effective / srate);
+
+  // High-Pass interno del tanque
+  hp_freq_tank = 30.0 + tension_factor * 40.0;
+  loop_hp_coef = 1.0 - exp(-2 * $pi * hp_freq_tank / srate);
+
+  // Difusión global
+  diff_factor = slider12 * 0.01;
+  g_in_ap_final = g_in_ap * diff_factor;
+  g_tank_ap_final = g_tank_ap_mod * diff_factor;
+
+  gain_out = 10^(slider10 / 20);
+  wet_mix = slider2 * 0.01;
+  dry_mix = 1.0 - wet_mix;
+);
+
+recalc_params();
+
+@slider
+recalc_params();
+
+@sample
+in_l = spl0;
+in_r = spl1;
+
+// 1. Saturación analógica
+slider7 > 0 ? (
+  drive_gain = 1 + (slider7 * 0.04);
+  in_l *= drive_gain; in_r *= drive_gain;
+  in_l = sin(max(-1.5707, min(1.5707, in_l)));
+  in_r = sin(max(-1.5707, min(1.5707, in_r)));
+);
+
+// 2. Pre-delay
+predelay_samples > 0 ? (
+  predelay_buf[ptr_pd]     = in_l;
+  predelay_buf[ptr_pd + 1] = in_r;
+  
+  rd_ptr = ptr_pd - predelay_samples * 2;
+  rd_ptr < 0 ? rd_ptr += 32000;
+  
+  p_in_l = predelay_buf[rd_ptr];
+  p_in_r = predelay_buf[rd_ptr + 1];
+  ptr_pd = (ptr_pd + 2) % 32000;
+) : (
+  p_in_l = in_l;
+  p_in_r = in_r;
+);
+
+input_mono = (p_in_l + p_in_r) * 0.5;
+
+// 3. Low Cut HPF
+lc_lp += lc_coef * (input_mono - lc_lp);
+lc_out = input_mono - lc_lp;
+
+// 4. Cadena Difusora de Entrada
+diff_1 = process_allpass(lc_out, in_ap1_buf, ptr_in_ap1, len_in_ap1, g_in_ap_final);
+diff_2 = process_allpass(diff_1,  in_ap2_buf, ptr_in_ap2, len_in_ap2, g_in_ap_final);
+diff_3 = process_allpass(diff_2,  in_ap3_buf, ptr_in_ap3, len_in_ap3, g_in_ap_final * 0.85);
+diff_4 = process_allpass(diff_3,  in_ap4_buf, ptr_in_ap4, len_in_ap4, g_in_ap_final * 0.85);
+
+// 5. Generador LFO
+lfo_phase += 2 * $pi * slider14 / srate;
+lfo_phase > 2 * $pi ? lfo_phase -= 2 * $pi;
+
+mod_depth_samples = slider13 * 0.25 * (srate / 44100);
+mod_l = sin(lfo_phase) * mod_depth_samples;
+mod_r = cos(lfo_phase) * mod_depth_samples;
+
+// 6. TANQUE IZQUIERDO
+tank_l_in = diff_4 + tank_r_out * feedback;
+
+t_ap1_l_out = process_allpass_mod(tank_l_in, tank_ap1_l_buf, ptr_t_ap1_l, len_t_ap1_l, 8000, mod_l, -g_tank_ap_final);
+
+tank_del1_l_buf[ptr_t_del1_l] = t_ap1_l_out;
+ptr_t_del1_l += 1; ptr_t_del1_l >= len_t_del1_l ? ptr_t_del1_l = 0;
+t_del1_l_out = tank_del1_l_buf[ptr_t_del1_l];
+
+damp_l += damp_coef * (t_del1_l_out - damp_l);
+hp_l += loop_hp_coef * (damp_l - hp_l);
+filtered_l = damp_l - hp_l;
+
+t_ap2_l_out = process_allpass(filtered_l, tank_ap2_l_buf, ptr_t_ap2_l, len_t_ap2_l, g_tank_ap_final);
+
+tank_del2_l_buf[ptr_t_del2_l] = t_ap2_l_out;
+ptr_t_del2_l += 1; ptr_t_del2_l >= len_t_del2_l ? ptr_t_del2_l = 0;
+tank_l_out = tank_del2_l_buf[ptr_t_del2_l];
+
+// 7. TANQUE DERECHO
+tank_r_in = diff_4 + tank_l_out * feedback;
+
+t_ap1_r_out = process_allpass_mod(tank_r_in, tank_ap1_r_buf, ptr_t_ap1_r, len_t_ap1_r, 8000, mod_r, -g_tank_ap_final);
+
+tank_del1_r_buf[ptr_t_del1_r] = t_ap1_r_out;
+ptr_t_del1_r += 1; ptr_t_del1_r >= len_t_del1_r ? ptr_t_del1_r = 0;
+t_del1_r_out = tank_del1_r_buf[ptr_t_del1_r];
+
+damp_r += damp_coef * (t_del1_r_out - damp_r);
+hp_r += loop_hp_coef * (damp_r - hp_r);
+filtered_r = damp_r - hp_r;
+
+t_ap2_r_out = process_allpass(filtered_r, tank_ap2_r_buf, ptr_t_ap2_r, len_t_ap2_r, g_tank_ap_final);
+
+tank_del2_r_buf[ptr_t_del2_r] = t_ap2_r_out;
+ptr_t_del2_r += 1; ptr_t_del2_r >= len_t_del2_r ? ptr_t_del2_r = 0;
+tank_r_out = tank_del2_r_buf[ptr_t_del2_r];
+
+// 8. Extracción Multitap
+wet_l = tank_del1_r_buf[(ptr_t_del1_r + (len_t_del1_r * 0.23)|0) % len_t_del1_r]
+      + tank_del2_r_buf[(ptr_t_del2_r + (len_t_del2_r * 0.61)|0) % len_t_del2_r]
+      - tank_ap2_l_buf[(ptr_t_ap2_l + (len_t_ap2_l * 0.45)|0) % len_t_ap2_l]
+      + tank_del1_l_buf[(ptr_t_del1_l + (len_t_del1_l * 0.78)|0) % len_t_del1_l];
+
+wet_r = tank_del1_l_buf[(ptr_t_del1_l + (len_t_del1_l * 0.23)|0) % len_t_del1_l]
+      + tank_del2_l_buf[(ptr_t_del2_l + (len_t_del2_l * 0.61)|0) % len_t_del2_l]
+      - tank_ap2_r_buf[(ptr_t_ap2_r + (len_t_ap2_r * 0.45)|0) % len_t_ap2_r]
+      + tank_del1_r_buf[(ptr_t_del1_r + (len_t_del1_r * 0.78)|0) % len_t_del1_r];
+
+wet_l *= 0.35;
+wet_r *= 0.35;
+
+// Ancho Estéreo
+mid = (wet_l + wet_r) * 0.5;
+side = (wet_l - wet_r) * 0.5 * (slider9 * 0.01);
+wet_l = mid + side;
+wet_r = mid - side;
+
+// Salida
+spl0 = (in_l * dry_mix + wet_l * wet_mix) * gain_out;
+spl1 = (in_r * dry_mix + wet_r * wet_mix) * gain_out;
+
+@gfx 760 410
+
+gfx_r = 0.08; gfx_g = 0.08; gfx_b = 0.10; gfx_a = 1.0;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+// Header
+gfx_r = 0.13; gfx_g = 0.14; gfx_b = 0.17;
+gfx_rect(0, 0, gfx_w, 42);
+
+gfx_r = r_c; gfx_g = g_c; gfx_b = b_c;
+gfx_x = 15; gfx_y = 13;
+gfx_drawstr("PLATES");
+
+// Pestañas alineadas
+tab_w = 100; tab_h = 24;
+i = 0;
+loop(5,
+  tx = 220 + i * 104; ty = 9;
+  slider11 == i ? (
+    gfx_r = r_c; gfx_g = g_c; gfx_b = b_c; gfx_a = 0.9;
+    gfx_rect(tx, ty, tab_w, tab_h);
+    gfx_r = 0.05; gfx_g = 0.05; gfx_b = 0.05;
+  ) : (
+    gfx_r = 0.20; gfx_g = 0.22; gfx_b = 0.26; gfx_a = 0.8;
+    gfx_rect(tx, ty, tab_w, tab_h);
+    gfx_r = 0.7; gfx_g = 0.75; gfx_b = 0.8;
+  );
+  
+  mouse_cap == 1 && active_knob == 0 && mouse_x >= tx && mouse_x <= tx+tab_w && mouse_y >= ty && mouse_y <= ty+tab_h ? (
+    slider11 = i;
+    sliderchange(slider11);
+    recalc_params();
+  );
+  
+  gfx_x = tx + 8; gfx_y = ty + 5;
+  i == 0 ? gfx_drawstr("140 Bright") :
+  i == 1 ? gfx_drawstr("140 Warm") :
+  i == 2 ? gfx_drawstr("140 Dark") :
+  i == 3 ? gfx_drawstr("240 Gold") : gfx_drawstr("EMT Hybrid");
+  i += 1;
+);
+
+// Panel Principal Visual (Compacto)
+gfx_r = 0.11; gfx_g = 0.12; gfx_b = 0.14;
+gfx_rect(20, 52, 720, 70);
+
+gfx_r = r_c; gfx_g = g_c; gfx_b = b_c; gfx_a = 0.18;
+gfx_rect(28, 58, 704, 58);
+
+gfx_r = 0.85; gfx_g = 0.90; gfx_b = 0.95; gfx_a = 1.0;
+gfx_x = 210; gfx_y = 80;
+slider11 == 3 ? gfx_drawstr("EMT 240 GOLD FOIL PHYSICAL MODELING") : gfx_drawstr("EMT 140 STEEL PLATE PHYSICAL MODELING");
+
+mouse_cap == 0 ? active_knob = 0;
+
+function process_knob(id, x, y, label, val, min_v, max_v) local(r, dy) (
+  r = 17;
+  mouse_cap == 1 && active_knob == 0 && abs(mouse_x - x) < r && abs(mouse_y - y) < r ? (
+    active_knob = id;
+    drag_start_y = mouse_y;
+    drag_start_val = val;
+  );
+  
+  active_knob == id && mouse_cap == 1 ? (
+    dy = drag_start_y - mouse_y;
+    val = drag_start_val + dy * (max_v - min_v) / 150;
+    val = max(min_v, min(max_v, val));
+    recalc_params();
+  );
+
+  gfx_r = 0.14; gfx_g = 0.16; gfx_b = 0.19;
+  gfx_circle(x, y, r, 1);
+  gfx_r = active_knob == id ? r_c : 0.3; 
+  gfx_g = active_knob == id ? g_c : 0.35; 
+  gfx_b = active_knob == id ? b_c : 0.4;
+  gfx_circle(x, y, r, 0);
+  
+  angle = -2.35 + (val - min_v) / (max_v - min_v) * 4.7;
+  gfx_r = r_c; gfx_g = g_c; gfx_b = b_c;
+  gfx_line(x, y, x + sin(angle)*(r-3), y - cos(angle)*(r-3));
+  
+  gfx_r = 0.8; gfx_g = 0.8; gfx_b = 0.8;
+  gfx_x = x - 22; gfx_y = y + r + 4;
+  gfx_drawstr(label);
+  val;
+);
+
+// Fila 1 de Knobs (Física & Tonalidad)
+slider1 = process_knob(1, 55,  165, "Decay",    slider1, 0.2, 30);    sliderchange(slider1);
+slider5 = process_knob(5, 150, 165, "Area",     slider5, 50, 200);    sliderchange(slider5);
+slider6 = process_knob(6, 245, 165, "Tension",  slider6, 0, 100);     sliderchange(slider6);
+slider3 = process_knob(3, 340, 165, "Low Cut",  slider3, 20, 1000);   sliderchange(slider3);
+slider4 = process_knob(4, 435, 165, "High Cut", slider4, 1000, 20000);sliderchange(slider4);
+slider12= process_knob(12,530, 165, "Diffusion",slider12, 0, 100);    sliderchange(slider12);
+slider7 = process_knob(7, 625, 165, "Drive",    slider7, 0, 100);     sliderchange(slider7);
+
+// Fila 2 de Knobs (Modulación & Mezcla)
+slider13= process_knob(13, 100, 280, "Mod Depth",slider13, 0, 100);   sliderchange(slider13);
+slider14= process_knob(14, 210, 280, "Mod Rate", slider14, 0.1, 5.0); sliderchange(slider14);
+slider8 = process_knob(8,  320, 280, "Pre-delay",slider8, 0, 500);    sliderchange(slider8);
+slider9 = process_knob(9,  430, 280, "Width",    slider9, 0, 100);    sliderchange(slider9);
+slider10= process_knob(10, 540, 280, "Gain",     slider10, -20, 20);  sliderchange(slider10);
+slider2 = process_knob(2,  650, 280, "Mix",      slider2, 0, 100);    sliderchange(slider2);
+
+// Lectura Digital de Valores
+gfx_r = r_c; gfx_g = g_c; gfx_b = b_c;
+gfx_x = 42;  gfx_y = 202; gfx_printf("%.2f s", slider1);
+gfx_x = 138; gfx_y = 202; gfx_printf("%d %%", slider5);
+gfx_x = 233; gfx_y = 202; gfx_printf("%d %%", slider6);
+gfx_x = 328; gfx_y = 202; gfx_printf("%d Hz", slider3);
+gfx_x = 422; gfx_y = 202; gfx_printf("%.1f k", slider4 * 0.001);
+gfx_x = 518; gfx_y = 202; gfx_printf("%d %%", slider12);
+gfx_x = 613; gfx_y = 202; gfx_printf("%d %%", slider7);
+
+gfx_x = 88;  gfx_y = 317; gfx_printf("%d %%", slider13);
+gfx_x = 195; gfx_y = 317; gfx_printf("%.2f Hz", slider14);
+gfx_x = 308; gfx_y = 317; gfx_printf("%d ms", slider8);
+gfx_x = 418; gfx_y = 317; gfx_printf("%d %%", slider9);
+gfx_x = 528; gfx_y = 317; gfx_printf("%.1f dB", slider10);
+gfx_x = 638; gfx_y = 317; gfx_printf("%.1f %%", slider2);

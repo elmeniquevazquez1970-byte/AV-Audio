@@ -1,0 +1,285 @@
+desc:Waves MV2 Exact GUI & Dynamics (v7.0 Replica)
+author:Audio Engineer JSFX
+version:7.0
+
+slider1:6.0<0,48,0.1>LOW LEVEL (Upward Boost dB)
+slider2:-6.0<-48,0,0.1>HIGH LEVEL (Downward Comp dB)
+slider3:-0.5<-48,0,0.1>OUTPUT GAIN (Trim dB)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+log10_inv = 0.4342944819032518;
+db2lin = 0.11512925464970229; // ln(10) / 20
+
+env_db = -120;
+
+peak_boost_db = 0;
+peak_cut_db = 0;
+out_lin_l = 0;
+out_lin_r = 0;
+
+active_slider = 0; // 0: ninguno, 1: Low, 2: High, 3: Output
+
+@slider
+s_low = slider1;      // Low Level Boost (0 a +48 dB)[cite: 1]
+s_high = slider2;     // High Level Threshold (0 a -48 dB)[cite: 1]
+s_out_db = slider3;   // Output Trim (0 a -48 dB)[cite: 1]
+
+out_gain = exp(s_out_db * db2lin);
+
+@block
+att_coeff = exp(-1.0 / (srate * 0.005));   // Ataque: 5ms
+rel_coeff = exp(-1.0 / (srate * 0.140));   // Liberación: 140ms
+meter_decay = exp(-1.0 / (srate * 0.150)); // Caída vúmetros: 150ms
+
+@sample
+inL = spl0;
+inR = spl1;
+
+// 1. Detección Peak estéreo en dBFS
+peak_in = max(abs(inL), abs(inR));
+inst_db = peak_in > 0.000000001 ? 20 * log(peak_in) * log10_inv : -180;
+
+alpha = (inst_db > env_db) ? att_coeff : rel_coeff;
+env_db = alpha * env_db + (1.0 - alpha) * inst_db;
+
+// 2. HIGH LEVEL COMPRESSOR (Downward + Auto Makeup Gain estilo RVox)[cite: 1]
+gr_high_db = 0;
+s_high < 0 ? (
+  diff = env_db - s_high;
+  diff > 0 ? (
+    gr_high_db = -diff * 0.65; // Soft knee ~3:1 ratio
+  );
+);
+auto_makeup_db = -s_high * 0.65;
+gain_high_db = gr_high_db + auto_makeup_db;
+
+// 3. LOW LEVEL COMPRESSOR (Upward Compression Exacta)[cite: 1]
+boost_low_db = 0;
+s_low > 0 ? (
+  thresh_low = -48 + s_low;
+  diff_low = thresh_low - env_db;
+  diff_low > 0 ? (
+    boost_low_db = min(s_low, diff_low * 0.65);
+    // Piso de ruido (-60 dBFS a -85 dBFS)
+    env_db < -60 ? (
+      fade = max(0, (env_db - (-85)) / 25.0);
+      boost_low_db *= fade;
+    );
+  );
+);
+
+// 4. Aplicación de ganancia total y procesamiento
+total_gain_db = gain_high_db + boost_low_db;
+total_gain = exp(total_gain_db * db2lin);
+
+outL = inL * total_gain * out_gain;
+outR = inR * total_gain * out_gain;
+
+spl0 = outL;
+spl1 = outR;
+
+// 5. Vúmetros en Amplitud Lineal (Sin congelamiento)
+peak_boost_db = max(boost_low_db, peak_boost_db * meter_decay);
+peak_cut_db   = max(abs(gr_high_db), peak_cut_db * meter_decay);
+
+out_lin_l = max(abs(outL), out_lin_l * meter_decay);
+out_lin_r = max(abs(outR), out_lin_r * meter_decay);
+
+@gfx 510 440
+gfx_clear = 0x24201A; // Fondo exterior estilo madera/bronce oscuro[cite: 2]
+
+// --- LÓGICA DE CONTROL CON RATÓN / INTERACCIÓN FADERS ---
+mouse_cap == 1 ? (
+  active_slider == 0 ? (
+    (mouse_x >= 35 && mouse_x <= 110 && mouse_y >= 50 && mouse_y <= 290) ? active_slider = 1;
+    (mouse_x >= 180 && mouse_x <= 265 && mouse_y >= 50 && mouse_y <= 290) ? active_slider = 2;
+    (mouse_x >= 350 && mouse_x <= 460 && mouse_y >= 50 && mouse_y <= 290) ? active_slider = 3;
+  );
+  
+  active_slider == 1 ? (
+    val = (270 - mouse_y) / 200.0;
+    slider1 = max(0, min(48, val * 48.0));
+    sliderchange(slider1);
+  );
+  active_slider == 2 ? (
+    val = (270 - mouse_y) / 200.0;
+    slider2 = min(0, max(-48, (val - 1.0) * 48.0));
+    sliderchange(slider2);
+  );
+  active_slider == 3 ? (
+    val = (270 - mouse_y) / 200.0;
+    slider3 = min(0, max(-48, (val - 1.0) * 48.0));
+    sliderchange(slider3);
+  );
+) : (
+  active_slider = 0;
+);
+
+s_low = slider1;
+s_high = slider2;
+s_out_db = slider3;
+
+// --- DIBUJO DE PANELES DE FONDO ---
+// Encabezados superiores generales[cite: 2]
+gfx_r = 0.12; gfx_g = 0.12; gfx_b = 0.12;
+gfx_x = 52; gfx_y = 12; gfx_drawstr("LOW LEVEL");
+gfx_x = 188; gfx_y = 12; gfx_drawstr("HIGH LEVEL");
+gfx_x = 368; gfx_y = 12; gfx_drawstr("OUTPUT");
+
+// Panel Izquierdo (Mármol / Plata para Low y High Level)[cite: 2]
+gfx_r = 0.82; gfx_g = 0.82; gfx_b = 0.80;
+gfx_rect(25, 35, 275, 340);
+gfx_r = 0.55; gfx_g = 0.55; gfx_b = 0.53;
+gfx_rect(25, 35, 275, 2); gfx_rect(25, 35, 2, 340);
+
+// Panel Derecho (Bronce para Output)[cite: 2]
+gfx_r = 0.62; gfx_g = 0.52; gfx_b = 0.38;
+gfx_rect(315, 35, 170, 340);
+gfx_r = 0.42; gfx_g = 0.32; gfx_b = 0.22;
+gfx_rect(315, 35, 170, 2); gfx_rect(315, 35, 2, 340);
+
+// --- SECCIÓN 1: LOW LEVEL ---[cite: 2]
+// Slot del fader Low Level
+gfx_r = 0.1; gfx_g = 0.1; gfx_b = 0.1;
+gfx_rect(58, 70, 4, 200);
+
+// Escala Low Level (Valores: 48, 36, 24, 12, 6, 3, 0)[cite: 2]
+gfx_r = 0.25; gfx_g = 0.25; gfx_b = 0.25;
+gfx_x = 90; gfx_y = 65;  gfx_drawstr("48");
+gfx_x = 90; gfx_y = 115; gfx_drawstr("36");
+gfx_x = 90; gfx_y = 165; gfx_drawstr("24");
+gfx_x = 90; gfx_y = 215; gfx_drawstr("12");
+gfx_x = 95; gfx_y = 240; gfx_drawstr("6");
+gfx_x = 95; gfx_y = 253; gfx_drawstr("3");
+gfx_x = 95; gfx_y = 265; gfx_drawstr("0");
+
+// Vúmetro Low Level (Amarillo con marco)[cite: 2]
+gfx_r = 0.10; gfx_g = 0.10; gfx_b = 0.10;
+gfx_rect(122, 70, 16, 200);
+gfx_r = 0.85; gfx_g = 0.90; gfx_b = 0.10;
+h_boost = max(0, min(200, (peak_boost_db / 48.0) * 200));
+h_boost > 0 ? gfx_rect(123, 270 - h_boost, 14, h_boost);
+
+// Tirador Fader Low Level (Metálico con lectura interna)[cite: 2]
+fader_low_y = 270 - (s_low / 48.0) * 200;
+gfx_r = 0.45; gfx_g = 0.45; gfx_b = 0.47;
+gfx_rect(36, fader_low_y - 10, 48, 20);
+gfx_r = 0.15; gfx_g = 0.15; gfx_b = 0.15;
+gfx_rect(38, fader_low_y - 8, 44, 16);
+gfx_r = 0.95; gfx_g = 0.95; gfx_b = 0.95;
+gfx_x = 48; gfx_y = fader_low_y - 5;
+#str_f1 = ""; sprintf(#str_f1, "%.1f", s_low); gfx_drawstr(#str_f1);
+
+// Visor Numérico Low Level (Caja negra inferior)[cite: 2]
+gfx_r = 0.12; gfx_g = 0.12; gfx_b = 0.12;
+gfx_rect(100, 298, 55, 22);
+gfx_r = 0.90; gfx_g = 0.90; gfx_b = 0.90;
+gfx_x = 112; gfx_y = 303;
+#str_b = ""; sprintf(#str_b, "%.1f", peak_boost_db); gfx_drawstr(#str_b);
+
+
+// --- SECCIÓN 2: HIGH LEVEL ---[cite: 2]
+// Vúmetro High Level (Rojo en la izquierda del módulo)[cite: 2]
+gfx_r = 0.10; gfx_g = 0.10; gfx_b = 0.10;
+gfx_rect(182, 70, 16, 200);
+gfx_r = 0.90; gfx_g = 0.15; gfx_b = 0.15;
+h_cut = max(0, min(200, (peak_cut_db / 48.0) * 200));
+h_cut > 0 ? gfx_rect(183, 70, 14, h_cut);
+
+// Escala High Level (Valores: 0, -3, -6, -12, -24, -36, -48 en el centro)[cite: 2]
+gfx_r = 0.25; gfx_g = 0.25; gfx_b = 0.25;
+gfx_x = 210; gfx_y = 65;  gfx_drawstr("0");
+gfx_x = 206; gfx_y = 103; gfx_drawstr("-3");
+gfx_x = 206; gfx_y = 120; gfx_drawstr("-6");
+gfx_x = 202; gfx_y = 150; gfx_drawstr("-12");
+gfx_x = 202; gfx_y = 198; gfx_drawstr("-24");
+gfx_x = 202; gfx_y = 238; gfx_drawstr("-36");
+gfx_x = 202; gfx_y = 265; gfx_drawstr("-48");
+
+// Slot del fader High Level[cite: 2]
+gfx_r = 0.1; gfx_g = 0.1; gfx_b = 0.1;
+gfx_rect(252, 70, 4, 200);
+
+// Tirador Fader High Level[cite: 2]
+fader_high_y = 270 + (s_high / 48.0) * 200;
+gfx_r = 0.45; gfx_g = 0.45; gfx_b = 0.47;
+gfx_rect(230, fader_high_y - 10, 48, 20);
+gfx_r = 0.15; gfx_g = 0.15; gfx_b = 0.15;
+gfx_rect(232, fader_high_y - 8, 44, 16);
+gfx_r = 0.95; gfx_g = 0.95; gfx_b = 0.95;
+gfx_x = 240; gfx_y = fader_high_y - 5;
+#str_f2 = ""; sprintf(#str_f2, "%.1f", s_high); gfx_drawstr(#str_f2);
+
+// Visor Numérico High Level (Caja negra inferior)[cite: 2]
+gfx_r = 0.12; gfx_g = 0.12; gfx_b = 0.12;
+gfx_rect(162, 298, 55, 22);
+gfx_r = 0.90; gfx_g = 0.90; gfx_b = 0.90;
+gfx_x = 172; gfx_y = 303;
+#str_c = ""; sprintf(#str_c, "-%.1f", peak_cut_db); gfx_drawstr(#str_c);
+
+
+// --- SECCIÓN 3: OUTPUT ---[cite: 2]
+// Indicadores superiores estilo LED Clip[cite: 2]
+gfx_r = 0.2; gfx_g = 0.2; gfx_b = 0.2;
+gfx_rect(352, 48, 16, 8); gfx_rect(427, 48, 16, 8);
+
+// Escala Output en el lado izquierdo (0, -3, -6, -12, -24, -36, -48, -60)[cite: 2]
+gfx_r = 0.15; gfx_g = 0.15; gfx_b = 0.15;
+gfx_x = 330; gfx_y = 65;  gfx_drawstr("0");
+gfx_x = 325; gfx_y = 103; gfx_drawstr("-3");
+gfx_x = 325; gfx_y = 120; gfx_drawstr("-6");
+gfx_x = 320; gfx_y = 150; gfx_drawstr("-12");
+gfx_x = 320; gfx_y = 198; gfx_drawstr("-24");
+gfx_x = 320; gfx_y = 238; gfx_drawstr("-36");
+gfx_x = 320; gfx_y = 252; gfx_drawstr("-48");
+gfx_x = 320; gfx_y = 265; gfx_drawstr("-60");
+
+// Vúmetros Estéreo L y R (Naranja / Ámbar)[cite: 2]
+gfx_r = 0.10; gfx_g = 0.10; gfx_b = 0.10;
+gfx_rect(352, 70, 16, 200); gfx_rect(427, 70, 16, 200);
+
+gfx_r = 0.95; gfx_g = 0.55; gfx_b = 0.05;
+out_db_l = out_lin_l > 0.000001 ? 20 * log(out_lin_l) * log10_inv : -120;
+out_db_r = out_lin_r > 0.000001 ? 20 * log(out_lin_r) * log10_inv : -120;
+
+h_out_l = max(0, min(200, ((out_db_l + 60) / 60.0) * 200));
+h_out_r = max(0, min(200, ((out_db_r + 60) / 60.0) * 200));
+
+h_out_l > 0 ? gfx_rect(353, 270 - h_out_l, 14, h_out_l);
+h_out_r > 0 ? gfx_rect(428, 270 - h_out_r, 14, h_out_r);
+
+// Slot Fader Output (Centro entre canal L y R)[cite: 2]
+gfx_r = 0.1; gfx_g = 0.1; gfx_b = 0.1;
+gfx_rect(396, 70, 4, 200);
+
+// Tirador Fader Output Trim[cite: 2]
+fader_out_y = 270 + (s_out_db / 48.0) * 200;
+gfx_r = 0.45; gfx_g = 0.45; gfx_b = 0.47;
+gfx_rect(372, fader_out_y - 10, 52, 20);
+gfx_r = 0.15; gfx_g = 0.15; gfx_b = 0.15;
+gfx_rect(374, fader_out_y - 8, 48, 16);
+gfx_r = 0.95; gfx_g = 0.95; gfx_b = 0.95;
+gfx_x = 383; gfx_y = fader_out_y - 5;
+#str_f3 = ""; sprintf(#str_f3, "%.1f", s_out_db); gfx_drawstr(#str_f3);
+
+// Visores Numéricos Salida L y R (Dos cajas independientes al pie)[cite: 2]
+gfx_r = 0.12; gfx_g = 0.12; gfx_b = 0.12;
+gfx_rect(342, 320, 45, 20);
+gfx_rect(412, 320, 45, 20);
+
+gfx_r = 0.90; gfx_g = 0.90; gfx_b = 0.90;
+gfx_x = 348; gfx_y = 324;
+#str_ol = ""; sprintf(#str_ol, "%.1f", max(-60.0, out_db_l)); gfx_drawstr(#str_ol);
+
+gfx_x = 418; gfx_y = 324;
+#str_or = ""; sprintf(#str_or, "%.1f", max(-60.0, out_db_r)); gfx_drawstr(#str_or);
+
+// --- MARCA CIENTÍFICA / LOGO MV2 ---[cite: 2]
+gfx_r = 0.10; gfx_g = 0.10; gfx_b = 0.10;
+gfx_x = 210; gfx_y = 390;
+gfx_drawstr("MV2");

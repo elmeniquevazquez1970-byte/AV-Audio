@@ -1,0 +1,291 @@
+desc:ROOMSREVERBS - Algorithmic Bricasti M7 Room Engine (GUI Knobs)
+
+slider1:0<0,17,1{Studio A (Natural),Vocal Booth / Soft,Live Drum / Percussion,Tiled / Glass Room,Wooden Room (Warm),Stone / Concrete,Acoustic Chamber,Bright Room,Colored (Red/Blue),Dark Room (Damped),Front Room (Medium),Center Room (Hallway),Back Room (Stairwell),Studio K (Corridor),Waits Room (Tunnel),Corn Room (Vault),Oakland Room (Studio),SF Perf Room (Hall)}>Profile
+slider2:50<10,100,1>Room Size (%)
+slider3:0.35<0.10,2.00,0.01>Decay Time (s)
+slider4:6000<1000,20000,100>Damping Cut (Hz)
+slider5:80<20,500,5>Low Cut (Hz)
+slider6:50<0,100,1>ER / Late (%)
+slider7:100<0,150,1>Stereo Width (%)
+slider8:30<0,100,1>Mix Wet (%)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+// Asignación de memoria para retardos
+MAX_DELAY = 65536;
+mem_er_l = 0;
+mem_er_r = MAX_DELAY;
+
+mem_fdn0 = MAX_DELAY * 2; mem_fdn1 = MAX_DELAY * 3;
+mem_fdn2 = MAX_DELAY * 4; mem_fdn3 = MAX_DELAY * 5;
+mem_fdn4 = MAX_DELAY * 6; mem_fdn5 = MAX_DELAY * 7;
+mem_fdn6 = MAX_DELAY * 8; mem_fdn7 = MAX_DELAY * 9;
+
+pos_er = 0;
+pos_fdn0 = 0; pos_fdn1 = 0; pos_fdn2 = 0; pos_fdn3 = 0;
+pos_fdn4 = 0; pos_fdn5 = 0; pos_fdn6 = 0; pos_fdn7 = 0;
+
+lp0 = 0; lp1 = 0; lp2 = 0; lp3 = 0; lp4 = 0; lp5 = 0; lp6 = 0; lp7 = 0;
+hp_l = 0; hp_r = 0;
+
+// Primos base para FDN (geometría modal)
+base_ms0 = 7.31;  base_ms1 = 11.17; base_ms2 = 13.89; base_ms3 = 17.53;
+base_ms4 = 21.41; base_ms5 = 25.07; base_ms6 = 29.63; base_ms7 = 33.71;
+
+// Estado del mouse para la interfaz gráfica
+active_knob = -1;
+drag_start_y = 0;
+drag_start_val = 0;
+
+@slider
+size_scale = slider2 * 0.01;
+rt60 = slider3;
+
+hp_freq = slider5;
+hp_alpha = exp(-2.0 * $pi * hp_freq / srate);
+
+// Mapeo sintético derivado de los 35 conjuntos de impulsos Bricasti M7 Rooms
+profile = slider1;
+profile == 0  ? ( size_mod = 1.00; damp_scale = 1.0; er_boost = 1.00; ); // Studio A (Natural Control) [59-61]
+profile == 1  ? ( size_mod = 0.55; damp_scale = 0.6; er_boost = 1.30; ); // Vocal Booth / Soft [60-62]
+profile == 2  ? ( size_mod = 1.15; damp_scale = 1.3; er_boost = 1.25; ); // Live Drum / Percussion [65-67]
+profile == 3  ? ( size_mod = 0.75; damp_scale = 1.8; er_boost = 1.50; ); // Tiled / Glass Room [68-70]
+profile == 4  ? ( size_mod = 0.90; damp_scale = 0.7; er_boost = 0.90; ); // Wooden Room (Warm)
+profile == 5  ? ( size_mod = 1.30; damp_scale = 1.6; er_boost = 1.35; ); // Stone / Concrete / Garage [69-74]
+profile == 6  ? ( size_mod = 1.10; damp_scale = 0.9; er_boost = 0.85; ); // Acoustic Chamber [57-59, 65-67]
+profile == 7  ? ( size_mod = 1.05; damp_scale = 1.4; er_boost = 1.10; ); // Bright Room [71-76]
+profile == 8  ? ( size_mod = 0.85; damp_scale = 1.0; er_boost = 1.15; ); // Colored Room (Red/Blue) [77-85]
+profile == 9  ? ( size_mod = 0.50; damp_scale = 0.4; er_boost = 1.40; ); // Dark Room (Damped) [86-91]
+profile == 10 ? ( size_mod = 0.95; damp_scale = 1.0; er_boost = 1.05; ); // Front Room (Medium Room) [83-85]
+profile == 11 ? ( size_mod = 1.20; damp_scale = 1.2; er_boost = 1.30; ); // Center Room (Hallway / Pasillo) [86-88]
+profile == 12 ? ( size_mod = 1.45; damp_scale = 1.5; er_boost = 1.40; ); // Back Room (Stairwell / Escalera) [89-91]
+profile == 13 ? ( size_mod = 0.80; damp_scale = 1.1; er_boost = 1.35; ); // Studio K (Corridor / Pasillo estrecho) [92-94]
+profile == 14 ? ( size_mod = 1.60; damp_scale = 0.8; er_boost = 1.20; ); // Waits Room (Tunnel Echo) [95-97]
+profile == 15 ? ( size_mod = 2.00; damp_scale = 0.7; er_boost = 1.10; ); // Corn Room (Vault / Bóveda) [98-100]
+profile == 16 ? ( size_mod = 0.60; damp_scale = 0.5; er_boost = 1.25; ); // Oakland Room (Intimate Studio) [101-103]
+profile == 17 ? ( size_mod = 1.35; damp_scale = 1.3; er_boost = 1.15; ); // SF Perf Room (Reflective Hall) [104-106]
+
+damp_freq = min(slider4 * damp_scale, srate * 0.49);
+damp_lp = exp(-2.0 * $pi * damp_freq / srate);
+
+d0_len = max(16, floor(base_ms0 * 0.001 * srate * size_scale * size_mod));
+d1_len = max(16, floor(base_ms1 * 0.001 * srate * size_scale * size_mod));
+d2_len = max(16, floor(base_ms2 * 0.001 * srate * size_scale * size_mod));
+d3_len = max(16, floor(base_ms3 * 0.001 * srate * size_scale * size_mod));
+d4_len = max(16, floor(base_ms4 * 0.001 * srate * size_scale * size_mod));
+d5_len = max(16, floor(base_ms5 * 0.001 * srate * size_scale * size_mod));
+d6_len = max(16, floor(base_ms6 * 0.001 * srate * size_scale * size_mod));
+d7_len = max(16, floor(base_ms7 * 0.001 * srate * size_scale * size_mod));
+
+fb0 = exp(-6.907755 * (d0_len / srate) / rt60);
+fb1 = exp(-6.907755 * (d1_len / srate) / rt60);
+fb2 = exp(-6.907755 * (d2_len / srate) / rt60);
+fb3 = exp(-6.907755 * (d3_len / srate) / rt60);
+fb4 = exp(-6.907755 * (d4_len / srate) / rt60);
+fb5 = exp(-6.907755 * (d5_len / srate) / rt60);
+fb6 = exp(-6.907755 * (d6_len / srate) / rt60);
+fb7 = exp(-6.907755 * (d7_len / srate) / rt60);
+
+er_tap1 = floor(0.0021 * srate * size_scale * size_mod);
+er_tap2 = floor(0.0048 * srate * size_scale * size_mod);
+er_tap3 = floor(0.0079 * srate * size_scale * size_mod);
+er_tap4 = floor(0.0113 * srate * size_scale * size_mod);
+er_tap5 = floor(0.0152 * srate * size_scale * size_mod);
+
+er_mix = (slider6 * 0.01) * er_boost;
+late_mix = (1.0 - slider6 * 0.01);
+wet_gain = slider8 * 0.01;
+dry_gain = 1.0 - wet_gain;
+width = slider7 * 0.01;
+
+@sample
+inL = spl0; inR = spl1;
+
+hp_l = inL * (1.0 - hp_alpha) + hp_l * hp_alpha;
+hp_r = inR * (1.0 - hp_alpha) + hp_r * hp_alpha;
+sigL = inL - hp_l;
+sigR = inR - hp_r;
+mono_in = (sigL + sigR) * 0.5;
+
+// Reflexiones Tempranas Multi-tap
+mem_er_l[pos_er] = sigL;
+mem_er_r[pos_er] = sigR;
+
+p_t1 = (pos_er - er_tap1 + MAX_DELAY) % MAX_DELAY;
+p_t2 = (pos_er - er_tap2 + MAX_DELAY) % MAX_DELAY;
+p_t3 = (pos_er - er_tap3 + MAX_DELAY) % MAX_DELAY;
+p_t4 = (pos_er - er_tap4 + MAX_DELAY) % MAX_DELAY;
+p_t5 = (pos_er - er_tap5 + MAX_DELAY) % MAX_DELAY;
+
+er_out_l = (mem_er_l[p_t1] * 0.85 + mem_er_r[p_t2] * -0.65 + mem_er_l[p_t4] * 0.45) * er_mix;
+er_out_r = (mem_er_r[p_t1] * 0.85 + mem_er_l[p_t3] * -0.65 + mem_er_r[p_t5] * 0.45) * er_mix;
+
+pos_er = (pos_er + 1) % MAX_DELAY;
+
+// FDN 8 Canales con Matriz Householder
+rd0 = mem_fdn0[(pos_fdn0 - d0_len + MAX_DELAY) % MAX_DELAY];
+rd1 = mem_fdn1[(pos_fdn1 - d1_len + MAX_DELAY) % MAX_DELAY];
+rd2 = mem_fdn2[(pos_fdn2 - d2_len + MAX_DELAY) % MAX_DELAY];
+rd3 = mem_fdn3[(pos_fdn3 - d3_len + MAX_DELAY) % MAX_DELAY];
+rd4 = mem_fdn4[(pos_fdn4 - d4_len + MAX_DELAY) % MAX_DELAY];
+rd5 = mem_fdn5[(pos_fdn5 - d5_len + MAX_DELAY) % MAX_DELAY];
+rd6 = mem_fdn6[(pos_fdn6 - d6_len + MAX_DELAY) % MAX_DELAY];
+rd7 = mem_fdn7[(pos_fdn7 - d7_len + MAX_DELAY) % MAX_DELAY];
+
+lp0 = rd0 * (1.0 - damp_lp) + lp0 * damp_lp;
+lp1 = rd1 * (1.0 - damp_lp) + lp1 * damp_lp;
+lp2 = rd2 * (1.0 - damp_lp) + lp2 * damp_lp;
+lp3 = rd3 * (1.0 - damp_lp) + lp3 * damp_lp;
+lp4 = rd4 * (1.0 - damp_lp) + lp4 * damp_lp;
+lp5 = rd5 * (1.0 - damp_lp) + lp5 * damp_lp;
+lp6 = rd6 * (1.0 - damp_lp) + lp6 * damp_lp;
+lp7 = rd7 * (1.0 - damp_lp) + lp7 * damp_lp;
+
+g0 = lp0 * fb0; g1 = lp1 * fb1; g2 = lp2 * fb2; g3 = lp3 * fb3;
+g4 = lp4 * fb4; g5 = lp5 * fb5; g6 = lp6 * fb6; g7 = lp7 * fb7;
+
+sum_fdn = (g0 + g1 + g2 + g3 + g4 + g5 + g6 + g7) * 0.25;
+h0 = g0 - sum_fdn; h1 = g1 - sum_fdn; h2 = g2 - sum_fdn; h3 = g3 - sum_fdn;
+h4 = g4 - sum_fdn; h5 = g5 - sum_fdn; h6 = g6 - sum_fdn; h7 = g7 - sum_fdn;
+
+mem_fdn0[pos_fdn0] = h0 + sigL;        mem_fdn1[pos_fdn1] = h1 + sigR;
+mem_fdn2[pos_fdn2] = h2 + mono_in;     mem_fdn3[pos_fdn3] = h3 - mono_in;
+mem_fdn4[pos_fdn4] = h4 + sigL * 0.7;  mem_fdn5[pos_fdn5] = h5 + sigR * 0.7;
+mem_fdn6[pos_fdn6] = h6 - sigL * 0.5;  mem_fdn7[pos_fdn7] = h7 + sigR * 0.5;
+
+pos_fdn0 = (pos_fdn0 + 1) % MAX_DELAY; pos_fdn1 = (pos_fdn1 + 1) % MAX_DELAY;
+pos_fdn2 = (pos_fdn2 + 1) % MAX_DELAY; pos_fdn3 = (pos_fdn3 + 1) % MAX_DELAY;
+pos_fdn4 = (pos_fdn4 + 1) % MAX_DELAY; pos_fdn5 = (pos_fdn5 + 1) % MAX_DELAY;
+pos_fdn6 = (pos_fdn6 + 1) % MAX_DELAY; pos_fdn7 = (pos_fdn7 + 1) % MAX_DELAY;
+
+late_l = (rd0 + rd2 + rd4 + rd6) * 0.35 * late_mix;
+late_r = (rd1 + rd3 + rd5 + rd7) * 0.35 * late_mix;
+
+wet_l = er_out_l + late_l;
+wet_r = er_out_r + late_r;
+
+mid = (wet_l + wet_r) * 0.5;
+side = (wet_l - wet_r) * 0.5 * width;
+
+spl0 = inL * dry_gain + (mid + side) * wet_gain;
+spl1 = inR * dry_gain + (mid - side) * wet_gain;
+
+@gfx 680 340
+
+// --- DIBUJO DE PERILLAS (KNOBS) ---
+function draw_knob(x, y, r, val, min_v, max_v, title, unit, step, slider_idx)
+(
+  dist = sqrt((mouse_x - x)^2 + (mouse_y - y)^2);
+  mouse_cap == 1 ? (
+    active_knob == -1 && dist <= r ? (
+      active_knob = slider_idx;
+      drag_start_y = mouse_y;
+      drag_start_val = val;
+    );
+  ) : (
+    active_knob == slider_idx ? active_knob = -1;
+  );
+
+  active_knob == slider_idx ? (
+    delta = (drag_start_y - mouse_y) * (max_v - min_v) / 150.0;
+    new_val = drag_start_val + delta;
+    new_val = max(min_v, min(max_v, new_val));
+    step > 0 ? new_val = floor(new_val / step + 0.5) * step;
+    slider(slider_idx) = new_val;
+    sliderchange(1 << (slider_idx - 1));
+    val = new_val;
+  );
+
+  norm_val = (val - min_v) / (max_v - min_v);
+  ang = -2.35619 + norm_val * 4.71239;
+
+  gfx_set(0.18, 0.20, 0.24, 1.0);
+  gfx_circle(x, y, r, 1);
+  gfx_set(0.35, 0.38, 0.45, 1.0);
+  gfx_circle(x, y, r, 0);
+
+  gfx_set(0.20, 0.75, 1.00, 1.0); // Azul neón
+  ptr_x = x + sin(ang) * (r - 5);
+  ptr_y = y - cos(ang) * (r - 5);
+  gfx_line(x, y, ptr_x, ptr_y);
+  gfx_circle(ptr_x, ptr_y, 2, 1);
+
+  gfx_set(0.80, 0.82, 0.88, 1.0);
+  gfx_measurestr(title, tw, th);
+  gfx_x = x - tw * 0.5;
+  gfx_y = y - r - 18;
+  gfx_drawstr(title);
+
+  gfx_set(0.20, 0.75, 1.00, 1.0);
+  #val_str = sprintf(#, (step >= 1 ? "%.0f" : "%.2f"), val);
+  #disp_str = sprintf(#, "%s%s", #val_str, unit);
+  gfx_measurestr(#disp_str, vw, vh);
+  gfx_x = x - vw * 0.5;
+  gfx_y = y + r + 6;
+  gfx_drawstr(#disp_str);
+);
+
+// --- INTERFAZ DE USUARIO ---
+gfx_set(0.09, 0.10, 0.12, 1.0);
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+gfx_set(0.14, 0.16, 0.19, 1.0);
+gfx_rect(0, 0, gfx_w, 45);
+gfx_set(0.20, 0.75, 1.00, 1.0);
+gfx_x = 20; gfx_y = 12;
+gfx_drawstr("ROOMSREVERBS");
+gfx_set(0.5, 0.55, 0.6, 1.0);
+gfx_drawstr("  |  Bricasti M7 Algorithmic Engine");
+
+gfx_set(0.8, 0.85, 0.9, 1.0);
+gfx_x = 340; gfx_y = 14;
+gfx_drawstr("Profile: ");
+
+profile == 0  ? #p_name = "Studio A (Natural)" :
+profile == 1  ? #p_name = "Vocal Booth / Soft" :
+profile == 2  ? #p_name = "Live Drum / Perc" :
+profile == 3  ? #p_name = "Tiled / Glass Room" :
+profile == 4  ? #p_name = "Wooden Room (Warm)" :
+profile == 5  ? #p_name = "Stone / Concrete" :
+profile == 6  ? #p_name = "Acoustic Chamber" :
+profile == 7  ? #p_name = "Bright Room" :
+profile == 8  ? #p_name = "Colored (Red/Blue)" :
+profile == 9  ? #p_name = "Dark Room (Damped)" :
+profile == 10 ? #p_name = "Front Room (Medium)" :
+profile == 11 ? #p_name = "Center Room (Hallway)" :
+profile == 12 ? #p_name = "Back Room (Stairwell)" :
+profile == 13 ? #p_name = "Studio K (Corridor)" :
+profile == 14 ? #p_name = "Waits Room (Tunnel)" :
+profile == 15 ? #p_name = "Corn Room (Vault)" :
+profile == 16 ? #p_name = "Oakland Room (Studio)" :
+#p_name = "SF Perf Room (Hall)";
+
+gfx_set(0.18, 0.22, 0.28, 1.0);
+gfx_rect(400, 8, 260, 28, 1);
+gfx_set(0.20, 0.75, 1.00, 1.0);
+gfx_rect(400, 8, 260, 28, 0);
+gfx_x = 410; gfx_y = 15;
+gfx_drawstr(#p_name);
+
+mouse_cap == 1 && mouse_x >= 400 && mouse_x <= 660 && mouse_y >= 8 && mouse_y <= 36 ? (
+  active_knob == -1 ? (
+    active_knob = 99;
+    slider1 = (slider1 + 1) % 18;
+    sliderchange(1);
+  );
+) : (
+  active_knob == 99 ? active_knob = -1;
+);
+
+draw_knob(85,  125, 26, slider2, 10, 100, "SIZE", "%", 1, 2);
+draw_knob(230, 125, 26, slider3, 0.10, 2.00, "DECAY", "s", 0.01, 3);
+draw_knob(375, 125, 26, slider4, 1000, 20000, "DAMPING", "Hz", 100, 4);
+draw_knob(520, 125, 26, slider5, 20, 500, "LOW CUT", "Hz", 5, 5);
+
+draw_knob(155, 245, 26, slider6, 0, 100, "ER / LATE", "%", 1, 6);
+draw_knob(300, 245, 26, slider7, 0, 150, "WIDTH", "%", 1, 7);
+draw_knob(445, 245, 26, slider8, 0, 100, "MIX WET", "%", 1, 8);
