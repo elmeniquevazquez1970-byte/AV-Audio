@@ -1,6 +1,6 @@
-desc:Waves MV2 Exact GUI & Dynamics (v7.0 Replica)
-author:Audio Engineer JSFX
-version:7.0
+desc:Waves MV2 Exact GUI & Dynamics 
+author: AV - Audio - Adrian VAzquez
+version:1.0
 
 slider1:6.0<0,48,0.1>LOW LEVEL (Upward Boost dB)
 slider2:-6.0<-48,0,0.1>HIGH LEVEL (Downward Comp dB)
@@ -33,14 +33,14 @@ out_gain = exp(s_out_db * db2lin);
 
 @block
 att_coeff = exp(-1.0 / (srate * 0.005));   // Ataque: 5ms
-rel_coeff = exp(-1.0 / (srate * 0.140));   // LiberaciÛn: 140ms
-meter_decay = exp(-1.0 / (srate * 0.150)); // CaÌda v˙metros: 150ms
+rel_coeff = exp(-1.0 / (srate * 0.140));   // Liberaci√≥n: 140ms
+meter_decay = exp(-1.0 / (srate * 0.150)); // Ca√≠da v√∫metros: 150ms
 
 @sample
 inL = spl0;
 inR = spl1;
 
-// 1. DetecciÛn Peak estÈreo en dBFS
+// 1. Detecci√≥n Peak est√©reo en dBFS
 peak_in = max(abs(inL), abs(inR));
 inst_db = peak_in > 0.000000001 ? 20 * log(peak_in) * log10_inv : -180;
 
@@ -73,7 +73,7 @@ s_low > 0 ? (
   );
 );
 
-// 4. AplicaciÛn de ganancia total y procesamiento
+// 4. Aplicaci√≥n de ganancia total y procesamiento
 total_gain_db = gain_high_db + boost_low_db;
 total_gain = exp(total_gain_db * db2lin);
 
@@ -83,7 +83,7 @@ outR = inR * total_gain * out_gain;
 spl0 = outL;
 spl1 = outR;
 
-// 5. V˙metros en Amplitud Lineal (Sin congelamiento)
+// 5. V√∫metros en Amplitud Lineal (Sin congelamiento)
 peak_boost_db = max(boost_low_db, peak_boost_db * meter_decay);
 peak_cut_db   = max(abs(gr_high_db), peak_cut_db * meter_decay);
 
@@ -93,7 +93,7 @@ out_lin_r = max(abs(outR), out_lin_r * meter_decay);
 @gfx 510 440
 gfx_clear = 0x24201A; // Fondo exterior estilo madera/bronce oscuro[cite: 2]
 
-// --- L”GICA DE CONTROL CON RAT”N / INTERACCI”N FADERS ---
+// --- L√ìGICA DE CONTROL CON RAT√ìN / INTERACCI√ìN FADERS ---
 mouse_cap == 1 ? (
   active_slider == 0 ? (
     (mouse_x >= 35 && mouse_x <= 110 && mouse_y >= 50 && mouse_y <= 290) ? active_slider = 1;
@@ -131,7 +131,7 @@ gfx_x = 52; gfx_y = 12; gfx_drawstr("LOW LEVEL");
 gfx_x = 188; gfx_y = 12; gfx_drawstr("HIGH LEVEL");
 gfx_x = 368; gfx_y = 12; gfx_drawstr("OUTPUT");
 
-// Panel Izquierdo (M·rmol / Plata para Low y High Level)[cite: 2]
+// Panel Izquierdo (M√°rmol / Plata para Low y High Level)[cite: 2]
 gfx_r = 0.82; gfx_g = 0.82; gfx_b = 0.80;
 gfx_rect(25, 35, 275, 340);
 gfx_r = 0.55; gfx_g = 0.55; gfx_b = 0.53;
@@ -143,7 +143,7 @@ gfx_rect(315, 35, 170, 340);
 gfx_r = 0.42; gfx_g = 0.32; gfx_b = 0.22;
 gfx_rect(315, 35, 170, 2); gfx_rect(315, 35, 2, 340);
 
-// --- SECCI”N 1: LOW LEVEL ---[cite: 2]
+// --- SECCI√ìN 1: LOW LEVEL ---[cite: 2]
 // Slot del fader Low Level
 gfx_r = 0.1; gfx_g = 0.1; gfx_b = 0.1;
 gfx_rect(58, 70, 4, 200);
@@ -158,14 +158,14 @@ gfx_x = 95; gfx_y = 240; gfx_drawstr("6");
 gfx_x = 95; gfx_y = 253; gfx_drawstr("3");
 gfx_x = 95; gfx_y = 265; gfx_drawstr("0");
 
-// V˙metro Low Level (Amarillo con marco)[cite: 2]
+// V√∫metro Low Level (Amarillo con marco)[cite: 2]
 gfx_r = 0.10; gfx_g = 0.10; gfx_b = 0.10;
 gfx_rect(122, 70, 16, 200);
 gfx_r = 0.85; gfx_g = 0.90; gfx_b = 0.10;
 h_boost = max(0, min(200, (peak_boost_db / 48.0) * 200));
 h_boost > 0 ? gfx_rect(123, 270 - h_boost, 14, h_boost);
 
-// Tirador Fader Low Level (Met·lico con lectura interna)[cite: 2]
+// Tirador Fader Low Level (Met√°lico con lectura interna)[cite: 2]
 fader_low_y = 270 - (s_low / 48.0) * 200;
 gfx_r = 0.45; gfx_g = 0.45; gfx_b = 0.47;
 gfx_rect(36, fader_low_y - 10, 48, 20);
@@ -175,7 +175,7 @@ gfx_r = 0.95; gfx_g = 0.95; gfx_b = 0.95;
 gfx_x = 48; gfx_y = fader_low_y - 5;
 #str_f1 = ""; sprintf(#str_f1, "%.1f", s_low); gfx_drawstr(#str_f1);
 
-// Visor NumÈrico Low Level (Caja negra inferior)[cite: 2]
+// Visor Num√©rico Low Level (Caja negra inferior)[cite: 2]
 gfx_r = 0.12; gfx_g = 0.12; gfx_b = 0.12;
 gfx_rect(100, 298, 55, 22);
 gfx_r = 0.90; gfx_g = 0.90; gfx_b = 0.90;
@@ -183,8 +183,8 @@ gfx_x = 112; gfx_y = 303;
 #str_b = ""; sprintf(#str_b, "%.1f", peak_boost_db); gfx_drawstr(#str_b);
 
 
-// --- SECCI”N 2: HIGH LEVEL ---[cite: 2]
-// V˙metro High Level (Rojo en la izquierda del mÛdulo)[cite: 2]
+// --- SECCI√ìN 2: HIGH LEVEL ---[cite: 2]
+// V√∫metro High Level (Rojo en la izquierda del m√≥dulo)[cite: 2]
 gfx_r = 0.10; gfx_g = 0.10; gfx_b = 0.10;
 gfx_rect(182, 70, 16, 200);
 gfx_r = 0.90; gfx_g = 0.15; gfx_b = 0.15;
@@ -215,7 +215,7 @@ gfx_r = 0.95; gfx_g = 0.95; gfx_b = 0.95;
 gfx_x = 240; gfx_y = fader_high_y - 5;
 #str_f2 = ""; sprintf(#str_f2, "%.1f", s_high); gfx_drawstr(#str_f2);
 
-// Visor NumÈrico High Level (Caja negra inferior)[cite: 2]
+// Visor Num√©rico High Level (Caja negra inferior)[cite: 2]
 gfx_r = 0.12; gfx_g = 0.12; gfx_b = 0.12;
 gfx_rect(162, 298, 55, 22);
 gfx_r = 0.90; gfx_g = 0.90; gfx_b = 0.90;
@@ -223,7 +223,7 @@ gfx_x = 172; gfx_y = 303;
 #str_c = ""; sprintf(#str_c, "-%.1f", peak_cut_db); gfx_drawstr(#str_c);
 
 
-// --- SECCI”N 3: OUTPUT ---[cite: 2]
+// --- SECCI√ìN 3: OUTPUT ---[cite: 2]
 // Indicadores superiores estilo LED Clip[cite: 2]
 gfx_r = 0.2; gfx_g = 0.2; gfx_b = 0.2;
 gfx_rect(352, 48, 16, 8); gfx_rect(427, 48, 16, 8);
@@ -239,7 +239,7 @@ gfx_x = 320; gfx_y = 238; gfx_drawstr("-36");
 gfx_x = 320; gfx_y = 252; gfx_drawstr("-48");
 gfx_x = 320; gfx_y = 265; gfx_drawstr("-60");
 
-// V˙metros EstÈreo L y R (Naranja / ¡mbar)[cite: 2]
+// V√∫metros Est√©reo L y R (Naranja / √Åmbar)[cite: 2]
 gfx_r = 0.10; gfx_g = 0.10; gfx_b = 0.10;
 gfx_rect(352, 70, 16, 200); gfx_rect(427, 70, 16, 200);
 
@@ -267,7 +267,7 @@ gfx_r = 0.95; gfx_g = 0.95; gfx_b = 0.95;
 gfx_x = 383; gfx_y = fader_out_y - 5;
 #str_f3 = ""; sprintf(#str_f3, "%.1f", s_out_db); gfx_drawstr(#str_f3);
 
-// Visores NumÈricos Salida L y R (Dos cajas independientes al pie)[cite: 2]
+// Visores Num√©ricos Salida L y R (Dos cajas independientes al pie)[cite: 2]
 gfx_r = 0.12; gfx_g = 0.12; gfx_b = 0.12;
 gfx_rect(342, 320, 45, 20);
 gfx_rect(412, 320, 45, 20);
@@ -279,7 +279,7 @@ gfx_x = 348; gfx_y = 324;
 gfx_x = 418; gfx_y = 324;
 #str_or = ""; sprintf(#str_or, "%.1f", max(-60.0, out_db_r)); gfx_drawstr(#str_or);
 
-// --- MARCA CIENTÕFICA / LOGO MV2 ---[cite: 2]
+// --- MARCA CIENT√çFICA / LOGO MV2 ---[cite: 2]
 gfx_r = 0.10; gfx_g = 0.10; gfx_b = 0.10;
 gfx_x = 210; gfx_y = 390;
 gfx_drawstr("MV2");
